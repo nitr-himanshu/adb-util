@@ -50,7 +50,13 @@ class LogcatWorker(QThread):
     def run(self):
         """Run logcat streaming."""
         try:
-            asyncio.run(self._stream_logcat())
+            # Create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(self._stream_logcat())
+            finally:
+                loop.close()
         except Exception as e:
             self.logger.error(f"Logcat worker error: {e}")
             self.error_occurred.emit(str(e))
@@ -58,41 +64,40 @@ class LogcatWorker(QThread):
     async def _stream_logcat(self):
         """Stream logcat asynchronously."""
         try:
+            self.stream_status_changed.emit(True)
+            self.logger.info(f"Starting logcat stream for device: {self.device_id}")
+            
             async for log_entry in self.logcat_handler.start_logcat_stream(
                 buffer=self.buffer,
                 filter_spec=self.filter_spec,
                 format_type=self.format_type
             ):
                 if self.should_stop:
+                    self.logger.info("Logcat streaming stopped by user request")
                     break
-                self.log_entry_received.emit(log_entry)
+                    
+                if log_entry:
+                    self.log_entry_received.emit(log_entry)
         
+        except asyncio.CancelledError:
+            self.logger.info("Logcat streaming was cancelled")
         except Exception as e:
+            self.logger.error(f"Logcat streaming error: {e}")
             self.error_occurred.emit(str(e))
         
         finally:
-            await self.logcat_handler.stop_logcat_stream()
+            try:
+                await self.logcat_handler.stop_logcat_stream()
+                self.logger.info("Logcat handler stopped successfully")
+            except Exception as e:
+                self.logger.error(f"Error stopping logcat handler: {e}")
             self.stream_status_changed.emit(False)
     
     def stop_streaming(self):
         """Stop logcat streaming."""
         self.should_stop = True
-        if self.logcat_handler:
-            asyncio.run_coroutine_threadsafe(
-                self.logcat_handler.stop_logcat_stream(),
-                asyncio.get_event_loop()
-            )
-
-
-class LogEntry:
-    """Represents a single log entry (keeping for compatibility)."""
-    
-    def __init__(self, timestamp, level, tag, pid, message):
-        self.timestamp = timestamp
-        self.level = level
-        self.tag = tag
-        self.pid = pid
-        self.message = message
+        # Don't try to call async functions from here
+        # The async loop will check should_stop flag
 
 
 class Logging(QWidget):
@@ -444,26 +449,48 @@ class Logging(QWidget):
         self.stop_btn.setEnabled(False)
         self.status_label.setText("Status: Stopping...")
         
-        if self.logcat_worker:
-            self.logcat_worker.stop_streaming()
-            self.logcat_worker.wait(5000)  # Wait up to 5 seconds
-            self.logcat_worker = None
+        if self.logcat_worker and self.logcat_worker.isRunning():
+            try:
+                self.logcat_worker.stop_streaming()
+                
+                # Use a non-blocking approach
+                if not self.logcat_worker.wait(3000):  # Wait 3 seconds max
+                    self.logger.warning("Worker thread didn't stop gracefully, terminating...")
+                    self.logcat_worker.terminate()
+                    self.logcat_worker.wait(1000)  # Wait 1 more second
+                    
+            except Exception as e:
+                self.logger.error(f"Error stopping worker: {e}")
+            finally:
+                self.logcat_worker = None
         
         self.status_label.setText("Status: Stopped")
         self.logger.info("Logcat capture stopped")
     
     def on_log_entry_received(self, log_entry):
         """Handle new log entry from worker thread."""
-        # Convert to our LogEntry format for compatibility
-        entry = LogEntry(
-            timestamp=log_entry.timestamp,
-            level=log_entry.level,
-            tag=log_entry.tag,
-            pid=log_entry.pid,
-            message=log_entry.message
-        )
-        
-        self.on_new_log_entry(log_entry)
+        try:
+            # log_entry is already a LogEntry from logcat_handler
+            self.log_entries.append(log_entry)
+            
+            # Maintain buffer size
+            if len(self.log_entries) > MAX_LOG_BUFFER_SIZE:
+                self.log_entries = self.log_entries[-MAX_LOG_BUFFER_SIZE:]
+            
+            # Apply filters and update display
+            if self.passes_filters(log_entry):
+                self.filtered_entries.append(log_entry)
+                self.display_log_entry(log_entry)
+            
+            # Update statistics
+            self.update_entry_count()
+            
+        except Exception as e:
+            self.logger.error(f"Error processing log entry: {e}")
+    
+    def update_entry_count(self):
+        """Update the entry count display."""
+        self.entry_count_label.setText(f"Entries: {len(self.log_entries)} (Filtered: {len(self.filtered_entries)})")
     
     def on_new_log_entry(self, log_entry):
         """Handle new log entry."""
@@ -641,8 +668,14 @@ class Logging(QWidget):
         
         def clear_logcat():
             try:
-                asyncio.run(self.logcat_handler.clear_logcat())
-                self.logger.info("Device logcat buffer cleared")
+                # Create a new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self.logcat_handler.clear_logcat())
+                    self.logger.info("Device logcat buffer cleared")
+                finally:
+                    loop.close()
             except Exception as e:
                 self.logger.error(f"Error clearing device logcat: {e}")
         
@@ -747,3 +780,24 @@ class Logging(QWidget):
         rate = current_count - self.last_entry_count
         self.last_entry_count = current_count
         self.capture_rate_label.setText(f"Rate: {rate}/sec")
+    
+    def closeEvent(self, event):
+        """Handle widget close event."""
+        self.cleanup()
+        super().closeEvent(event)
+    
+    def cleanup(self):
+        """Clean up resources."""
+        try:
+            if self.is_capturing:
+                self.stop_capture()
+            
+            # Ensure worker is properly terminated
+            if self.logcat_worker and self.logcat_worker.isRunning():
+                self.logcat_worker.terminate()
+                self.logcat_worker.wait(1000)
+                
+            self.logger.info("Logging widget cleanup completed")
+            
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
