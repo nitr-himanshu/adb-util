@@ -627,10 +627,14 @@ class Logging(QWidget):
         if not self.level_checkboxes[entry.level].isChecked():
             return False
         
-        # PID filter
-        if self.pid_filter_enabled.isChecked():
-            if entry.pid != self.pid_filter_input.value():
-                return False
+        # PID filter (skip for entries without PID like raw format)
+        if self.pid_filter_enabled.isChecked() and entry.pid:
+            try:
+                if int(entry.pid) != self.pid_filter_input.value():
+                    return False
+            except ValueError:
+                # Skip entries with non-numeric PIDs
+                pass
         
         # Search filter
         search_text = self.search_input.text()
@@ -665,8 +669,15 @@ class Logging(QWidget):
             "F": "#ff0000"   # Red
         }
         
-        # Format log line
-        log_line = f"{entry.timestamp} {entry.level}/{entry.tag}({entry.pid}): {entry.message}"
+        # Format log line based on entry content
+        if entry.tag == "raw" or (not entry.timestamp and not entry.pid):
+            # Raw format - display just the message
+            log_line = entry.message
+        else:
+            # Structured format - display with metadata
+            timestamp_part = f"{entry.timestamp} " if entry.timestamp else ""
+            pid_part = f"({entry.pid})" if entry.pid else ""
+            log_line = f"{timestamp_part}{entry.level}/{entry.tag}{pid_part}: {entry.message}"
         
         # Add to display
         cursor = self.log_display.textCursor()

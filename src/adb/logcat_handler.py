@@ -49,6 +49,7 @@ class LogcatHandler:
         self.is_streaming = False
         self.log_entries: List[LogEntry] = []
         self.max_buffer_size = MAX_LOG_BUFFER_SIZE
+        self.current_format = "time"  # Track current logcat format
         
         # Callbacks for real-time updates
         self.on_log_entry: Optional[Callable[[LogEntry], None]] = None
@@ -77,6 +78,9 @@ class LogcatHandler:
             return
         
         try:
+            # Store current format for parsing
+            self.current_format = format_type
+            
             # Build logcat command
             command = ADB_LOGCAT_COMMAND.format(device_id=self.device_id)
             
@@ -217,6 +221,9 @@ class LogcatHandler:
                              format_type: str = "time") -> List[LogEntry]:
         """Get logcat dump (non-streaming)."""
         try:
+            # Store current format for parsing
+            self.current_format = format_type
+            
             # Build command
             command = ADB_LOGCAT_COMMAND.format(device_id=self.device_id)
             command += f" -v {format_type} -d"  # -d for dump mode
@@ -268,7 +275,19 @@ class LogcatHandler:
         if not line.strip():
             return None
         
-        # Try different patterns
+        # Handle raw format specially
+        if self.current_format == "raw":
+            return LogEntry(
+                timestamp="",
+                pid="",
+                tid="",
+                level="I",  # Default to Info level for raw logs
+                tag="raw",  # Use 'raw' as default tag
+                message=line,
+                raw_line=line
+            )
+        
+        # Try different patterns for structured formats
         for pattern in self.logcat_patterns:
             match = pattern.match(line)
             if match:
@@ -313,8 +332,17 @@ class LogcatHandler:
                         raw_line=line
                     )
         
-        # If no pattern matches, return None
-        return None
+        # If no pattern matches for structured formats, treat as raw-like
+        # This handles cases where logcat output doesn't match expected patterns
+        return LogEntry(
+            timestamp="",
+            pid="",
+            tid="",
+            level="I",  # Default to Info level
+            tag="unknown",  # Use 'unknown' as default tag for unparsed lines
+            message=line,
+            raw_line=line
+        )
     
     def filter_entries(self, 
                       entries: List[LogEntry],
