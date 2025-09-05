@@ -6,22 +6,113 @@ A comprehensive Python-based desktop application for Android Debug Bridge (ADB) 
 ## Technology Stack
 
 ### Core Technologies
-- **Language**: Python 3.9+
-- **GUI Framework**: PyQt6/PySide6
-- **Async Operations**: asyncio
-- **ADB Integration**: python-adb + subprocess
-- **File Operations**: pathlib, aiofiles
+
+#### **Language: Python 3.9+**
+**Why Python:**
+- **Excellent subprocess handling** - Perfect for managing ADB CLI commands and long-running processes
+- **Rich ecosystem** - Abundant libraries for GUI, file operations, and system integration
+- **Cross-platform compatibility** - Runs seamlessly on Windows, macOS, and Linux
+- **Rapid development** - Faster prototyping and iteration compared to compiled languages
+- **System integration** - Native support for file operations, process management, and system calls
+
+#### **GUI Framework: PyQt6/PySide6**
+**Why PyQt6/PySide6:**
+- **Professional desktop applications** - Industry-standard for creating native-looking desktop apps
+- **Rich widget set** - Built-in support for tabs, file browsers, text editors, and complex layouts
+- **Cross-platform native look** - Automatically adapts to OS-specific styling (Windows, macOS, Linux)
+- **Mature and stable** - Battle-tested framework with extensive documentation
+- **Qt ecosystem** - Access to Qt's powerful features like threading, networking, and multimedia
+- **Better than alternatives:**
+  - Tkinter: Too basic for complex UIs
+  - Kivy: More suited for mobile/touch interfaces
+  - Dear PyGui: Newer, less mature ecosystem
+
+#### **Async Operations: asyncio**
+**Why asyncio:**
+- **Non-blocking UI** - Keep interface responsive during long-running ADB operations
+- **Concurrent operations** - Handle multiple device operations simultaneously
+- **Built-in Python support** - No external dependencies, part of standard library
+- **Perfect for I/O-bound tasks** - ADB commands, file transfers, and logcat streaming are I/O intensive
+- **Event-driven architecture** - Natural fit for GUI applications with user interactions
+
+#### **ADB Integration: python-adb + subprocess**
+**Why this combination:**
+- **python-adb library:**
+  - Direct ADB protocol communication without CLI overhead
+  - Better performance for frequent operations
+  - Pure Python implementation for reliability
+- **subprocess module:**
+  - Fallback for complex ADB commands not supported by python-adb
+  - Access to full ADB CLI functionality
+  - Better error handling and output capture
+- **Dual approach benefits:**
+  - Best of both worlds - performance and compatibility
+  - Flexibility to choose optimal method per operation
+
+#### **File Operations: pathlib + aiofiles**
+**Why pathlib + aiofiles:**
+- **pathlib advantages:**
+  - Modern, object-oriented path handling
+  - Cross-platform path operations
+  - Cleaner, more readable code than os.path
+  - Built-in validation and manipulation methods
+- **aiofiles advantages:**
+  - Async file operations prevent UI blocking
+  - Essential for large file transfers
+  - Maintains responsiveness during I/O operations
+  - Compatible with asyncio event loop
 
 ### Key Libraries
-```
-PyQt6/PySide6     # Professional desktop UI
+
+```python
+# GUI and Desktop Integration
+PyQt6/PySide6     # Professional desktop UI framework
+                  # Reason: Industry standard, mature, cross-platform native look
+
+# ADB Communication
 python-adb        # Direct ADB protocol communication
+                  # Reason: Better performance than CLI, pure Python
+subprocess        # ADB CLI command execution
+                  # Reason: Full ADB compatibility, reliable fallback
+
+# Async and Performance
 asyncio           # Async operations for responsive UI
-pathlib           # Modern file path handling
+                  # Reason: Built-in, perfect for I/O-bound operations
 aiofiles          # Async file operations
+                  # Reason: Non-blocking file I/O for large transfers
+
+# File and Path Operations
+pathlib           # Modern file path handling
+                  # Reason: Object-oriented, cross-platform, cleaner code
+
+# System Monitoring
 psutil            # System process monitoring
+                  # Reason: Monitor ADB processes, system resources
 watchdog          # File system monitoring
+                  # Reason: Detect file changes for auto-refresh
+
+# Development and Quality
+pytest            # Testing framework
+                  # Reason: Industry standard, excellent plugin ecosystem
+black             # Code formatting
+                  # Reason: Consistent code style, zero configuration
+flake8            # Linting
+                  # Reason: Catch errors, maintain code quality
 ```
+
+### Alternative Technologies Considered
+
+#### **Rejected GUI Frameworks:**
+- **Electron**: Too heavy, requires web technologies, larger memory footprint
+- **Tkinter**: Limited styling options, looks outdated, poor for complex layouts
+- **Kivy**: Better for mobile/touch, unfamiliar desktop paradigms
+- **wxPython**: Less active development, smaller community
+
+#### **Rejected Languages:**
+- **Node.js**: Weaker subprocess handling, callback complexity for CLI tools
+- **Java**: Verbose syntax, slower development, JVM overhead
+- **C++**: Overkill complexity, slower development for this use case
+- **Go**: Limited GUI options, less suitable for desktop applications
 
 ## Project Architecture
 
