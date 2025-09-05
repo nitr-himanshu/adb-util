@@ -14,6 +14,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QDir
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QFont, QFileSystemModel
 
+from utils.logger import get_logger, log_file_operation
+
 
 class FileManager(QWidget):
     """File manager widget with local and device file browsers."""
@@ -21,9 +23,13 @@ class FileManager(QWidget):
     def __init__(self, device_id: str):
         super().__init__()
         self.device_id = device_id
+        self.logger = get_logger(__name__)
         self.local_model = None
         self.device_model = None
+        
+        self.logger.info(f"Initializing file manager for device: {device_id}")
         self.init_ui()
+        self.logger.info("File manager initialization complete")
     
     def init_ui(self):
         """Initialize the file manager UI."""
@@ -264,16 +270,22 @@ class FileManager(QWidget):
     
     def push_file(self):
         """Push file from local to device."""
+        self.logger.info(f"Starting file push operation to device {self.device_id}")
+        log_file_operation("push", "local_file", f"device:{self.device_id}", "started")
         # TODO: Implement file push operation
         self.show_progress("Pushing file to device...")
     
     def pull_file(self):
         """Pull file from device to local."""
+        self.logger.info(f"Starting file pull operation from device {self.device_id}")
+        log_file_operation("pull", f"device:{self.device_id}", "local_file", "started")
         # TODO: Implement file pull operation
         self.show_progress("Pulling file from device...")
     
     def sync_folders(self):
         """Sync folders between local and device."""
+        self.logger.info(f"Starting folder sync operation with device {self.device_id}")
+        log_file_operation("sync", "local_folder", f"device:{self.device_id}", "started")
         # TODO: Implement folder sync
         self.show_progress("Syncing folders...")
     

@@ -51,3 +51,11 @@ FILE_TRANSFER_TIMEOUT = 300
 # Buffer Sizes
 MAX_LOG_BUFFER_SIZE = 10000
 FILE_TRANSFER_CHUNK_SIZE = 8192
+
+# Logging Configuration
+DEFAULT_LOG_DIR = Path.home() / ".adb-util" / "logs"
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+MAX_LOG_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+LOG_BACKUP_COUNT = 5
+DEFAULT_FILE_LOGGING = False  # File logging disabled by default

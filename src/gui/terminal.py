@@ -13,6 +13,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont, QTextCursor, QAction
 
+from utils.logger import get_logger
+
 
 class Terminal(QWidget):
     """Terminal widget for ADB shell commands."""
@@ -20,9 +22,13 @@ class Terminal(QWidget):
     def __init__(self, device_id: str):
         super().__init__()
         self.device_id = device_id
+        self.logger = get_logger(__name__)
         self.command_history = []
         self.history_index = -1
+        
+        self.logger.info(f"Initializing terminal for device: {device_id}")
         self.init_ui()
+        self.logger.info("Terminal initialization complete")
     
     def init_ui(self):
         """Initialize the terminal UI."""
@@ -222,6 +228,8 @@ class Terminal(QWidget):
         command = self.command_input.text().strip()
         if not command:
             return
+        
+        self.logger.info(f"Executing command on device {self.device_id}: {command}")
         
         # Add to history
         if command not in self.command_history:

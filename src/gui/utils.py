@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPixmap, QIcon
 
+from utils.logger import get_logger, log_device_operation
+
 
 class Utils(QWidget):
     """Utils widget for device utilities and system operations."""
@@ -22,7 +24,11 @@ class Utils(QWidget):
     def __init__(self, device_id: str):
         super().__init__()
         self.device_id = device_id
+        self.logger = get_logger(__name__)
+        
+        self.logger.info(f"Initializing device utils for device: {device_id}")
         self.init_ui()
+        self.logger.info("Device utils initialization complete")
     
     def init_ui(self):
         """Initialize the utils UI."""
@@ -560,6 +566,7 @@ Last Updated: 2021-06-15"""
     
     def reboot_device(self):
         """Reboot device."""
+        self.logger.warning(f"User initiated device reboot for {self.device_id}")
         reply = QMessageBox.question(
             self, 
             "Reboot", 
@@ -567,10 +574,15 @@ Last Updated: 2021-06-15"""
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
+            log_device_operation(self.device_id, "reboot", "User confirmed reboot")
             QMessageBox.information(self, "Reboot", "Device rebooting...")
+        else:
+            self.logger.info(f"Device reboot cancelled by user for {self.device_id}")
     
     def reboot_recovery(self):
         """Reboot to recovery mode."""
+        self.logger.warning(f"User initiated recovery mode reboot for {self.device_id}")
+        log_device_operation(self.device_id, "reboot_recovery", "Entering recovery mode")
         QMessageBox.information(self, "Recovery", "Rebooting to recovery mode...")
     
     def reboot_bootloader(self):

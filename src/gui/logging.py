@@ -14,6 +14,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat
 
+from utils.logger import get_logger
+
 
 class LogEntry:
     """Represents a single log entry."""
@@ -32,11 +34,15 @@ class Logging(QWidget):
     def __init__(self, device_id: str):
         super().__init__()
         self.device_id = device_id
+        self.logger = get_logger(__name__)
         self.is_capturing = False
         self.log_entries = []
         self.filtered_entries = []
+        
+        self.logger.info(f"Initializing logcat viewer for device: {device_id}")
         self.init_ui()
         self.setup_timer()
+        self.logger.info("Logcat viewer initialization complete")
     
     def init_ui(self):
         """Initialize the logging UI."""

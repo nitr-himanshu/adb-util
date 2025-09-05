@@ -13,16 +13,22 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QFont, QAction
 
+from utils.logger import get_logger
+
 
 class MainWindow(QMainWindow):
     """Main application window with tab management."""
     
     def __init__(self):
         super().__init__()
+        self.logger = get_logger(__name__)
         self.tab_widget = None
         self.device_list = None
         self.status_label = None
+        
+        self.logger.info("Initializing main window...")
         self.init_ui()
+        self.logger.info("Main window initialization complete")
     
     def init_ui(self):
         """Initialize the user interface."""
@@ -141,6 +147,7 @@ class MainWindow(QMainWindow):
         
         preferences_action = QAction("&Preferences", self)
         preferences_action.setShortcut("Ctrl+,")
+        preferences_action.triggered.connect(self.show_preferences)
         tools_menu.addAction(preferences_action)
         
         # Help menu
@@ -213,52 +220,70 @@ class MainWindow(QMainWindow):
     def open_device_tab(self, mode):
         """Open a new tab for the selected device and mode."""
         if not self.device_list.currentItem():
+            self.logger.warning("Attempted to open device tab without selecting a device")
             QMessageBox.warning(self, "No Device Selected", "Please select a device first.")
             return
         
         device_text = self.device_list.currentItem().text()
         device_id = device_text.split("(")[1].split(")")[0]  # Extract device ID
         
+        self.logger.info(f"Opening {mode} tab for device: {device_id}")
+        
         tab_title = f"{device_id}-{mode}"
         
         # Check if tab already exists
         for i in range(self.tab_widget.count()):
             if self.tab_widget.tabText(i) == tab_title:
+                self.logger.debug(f"Tab {tab_title} already exists, switching to it")
                 self.tab_widget.setCurrentIndex(i)
                 return
         
         # Create new tab based on mode
-        if mode == "file_manager":
-            from gui.file_manager import FileManager
-            widget = FileManager(device_id)
-        elif mode == "terminal":
-            from gui.terminal import Terminal
-            widget = Terminal(device_id)
-        elif mode == "logging":
-            from gui.logging import Logging
-            widget = Logging(device_id)
-        elif mode == "utils":
-            from gui.utils import Utils
-            widget = Utils(device_id)
-        else:
-            widget = QLabel(f"Mode '{mode}' not implemented yet")
-        
-        self.tab_widget.addTab(widget, tab_title)
-        self.tab_widget.setCurrentWidget(widget)
+        try:
+            if mode == "file_manager":
+                from gui.file_manager import FileManager
+                widget = FileManager(device_id)
+            elif mode == "terminal":
+                from gui.terminal import Terminal
+                widget = Terminal(device_id)
+            elif mode == "logging":
+                from gui.logging import Logging
+                widget = Logging(device_id)
+            elif mode == "utils":
+                from gui.utils import Utils
+                widget = Utils(device_id)
+            else:
+                self.logger.warning(f"Unknown mode requested: {mode}")
+                widget = QLabel(f"Mode '{mode}' not implemented yet")
+            
+            self.tab_widget.addTab(widget, tab_title)
+            self.tab_widget.setCurrentWidget(widget)
+            self.logger.info(f"Successfully created {mode} tab for device {device_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create {mode} tab for device {device_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Error", f"Failed to create {mode} tab: {str(e)}")
     
     def close_tab(self, index):
         """Close a tab."""
         if index > 0:  # Don't close the home tab
+            tab_name = self.tab_widget.tabText(index)
+            self.logger.info(f"Closing tab: {tab_name}")
             self.tab_widget.removeTab(index)
+        else:
+            self.logger.debug("Attempted to close home tab - ignored")
     
     def refresh_devices(self):
         """Refresh the device list."""
+        self.logger.info("Refreshing device list...")
         self.status_label.setText("Refreshing devices...")
         # TODO: Implement actual device discovery
         self.status_label.setText("Devices refreshed")
+        self.logger.info("Device list refresh completed")
     
     def show_about(self):
         """Show about dialog."""
+        self.logger.debug("Showing about dialog")
         QMessageBox.about(
             self,
             "About ADB-UTIL",
@@ -267,3 +292,14 @@ class MainWindow(QMainWindow):
             "for Android Debug Bridge (ADB) operations.\n\n"
             "Built with PyQt6"
         )
+    
+    def show_preferences(self):
+        """Show preferences dialog."""
+        self.logger.debug("Opening preferences dialog")
+        try:
+            from gui.preferences import PreferencesDialog
+            preferences_dialog = PreferencesDialog(self)
+            preferences_dialog.exec()
+        except Exception as e:
+            self.logger.error(f"Error opening preferences dialog: {e}", exc_info=True)
+            QMessageBox.critical(self, "Error", f"Failed to open preferences: {e}")
