@@ -21,6 +21,17 @@ ADB_SHELL_COMMAND = "adb -s {device_id} shell"
 ADB_LOGCAT_COMMAND = "adb -s {device_id} logcat"
 ADB_PUSH_COMMAND = "adb -s {device_id} push {local_path} {device_path}"
 ADB_PULL_COMMAND = "adb -s {device_id} pull {device_path} {local_path}"
+ADB_GETPROP_COMMAND = "adb -s {device_id} shell getprop"
+
+# Device States
+DEVICE_STATE_DEVICE = "device"
+DEVICE_STATE_OFFLINE = "offline"
+DEVICE_STATE_UNAUTHORIZED = "unauthorized"
+DEVICE_STATE_UNKNOWN = "unknown"
+
+# Connection Types
+CONNECTION_USB = "usb"
+CONNECTION_TCPIP = "tcpip"
 
 # UI Constants
 DEFAULT_WINDOW_WIDTH = 1200
@@ -47,6 +58,7 @@ DEFAULT_DOWNLOADS_DIR = Path.home() / "Downloads" / "adb-util"
 COMMAND_TIMEOUT = 30
 DEVICE_DISCOVERY_TIMEOUT = 10
 FILE_TRANSFER_TIMEOUT = 300
+DEVICE_MONITORING_INTERVAL = 5
 
 # Buffer Sizes
 MAX_LOG_BUFFER_SIZE = 10000
