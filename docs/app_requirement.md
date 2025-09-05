@@ -1,6 +1,6 @@
 # ADB-UTIL
 
-## Feature requirment
+## Feature requirement
 
 ### Device
 
