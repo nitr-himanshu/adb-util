@@ -4,21 +4,88 @@ Logging UI
 Real-time logcat viewer with filtering and search capabilities.
 """
 
+import asyncio
+import re
+from typing import List, Optional, Set
+from datetime import datetime
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLineEdit, QPushButton, QComboBox, QCheckBox,
     QLabel, QFrame, QSplitter, QTabWidget,
     QSpinBox, QGroupBox, QScrollArea, QMessageBox,
-    QFileDialog, QProgressBar
+    QFileDialog, QProgressBar, QApplication
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread
 from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat
 
+from adb.logcat_handler import LogcatHandler, LogEntry
 from utils.logger import get_logger
+from utils.constants import LOG_LEVELS, LOGCAT_FORMATS, LOGCAT_BUFFERS, MAX_LOG_BUFFER_SIZE
+
+
+class LogcatWorker(QThread):
+    """Worker thread for logcat streaming."""
+    
+    log_entry_received = pyqtSignal(object)
+    stream_status_changed = pyqtSignal(bool)
+    error_occurred = pyqtSignal(str)
+    
+    def __init__(self, device_id: str):
+        super().__init__()
+        self.device_id = device_id
+        self.logcat_handler = LogcatHandler(device_id)
+        self.logger = get_logger(__name__)
+        self.should_stop = False
+        self.buffer = "main"
+        self.format_type = "time"
+        self.filter_spec = None
+    
+    def set_parameters(self, buffer: str, format_type: str, filter_spec: Optional[str] = None):
+        """Set logcat parameters."""
+        self.buffer = buffer
+        self.format_type = format_type
+        self.filter_spec = filter_spec
+    
+    def run(self):
+        """Run logcat streaming."""
+        try:
+            asyncio.run(self._stream_logcat())
+        except Exception as e:
+            self.logger.error(f"Logcat worker error: {e}")
+            self.error_occurred.emit(str(e))
+    
+    async def _stream_logcat(self):
+        """Stream logcat asynchronously."""
+        try:
+            async for log_entry in self.logcat_handler.start_logcat_stream(
+                buffer=self.buffer,
+                filter_spec=self.filter_spec,
+                format_type=self.format_type
+            ):
+                if self.should_stop:
+                    break
+                self.log_entry_received.emit(log_entry)
+        
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+        
+        finally:
+            await self.logcat_handler.stop_logcat_stream()
+            self.stream_status_changed.emit(False)
+    
+    def stop_streaming(self):
+        """Stop logcat streaming."""
+        self.should_stop = True
+        if self.logcat_handler:
+            asyncio.run_coroutine_threadsafe(
+                self.logcat_handler.stop_logcat_stream(),
+                asyncio.get_event_loop()
+            )
 
 
 class LogEntry:
-    """Represents a single log entry."""
+    """Represents a single log entry (keeping for compatibility)."""
     
     def __init__(self, timestamp, level, tag, pid, message):
         self.timestamp = timestamp
@@ -36,13 +103,31 @@ class Logging(QWidget):
         self.device_id = device_id
         self.logger = get_logger(__name__)
         self.is_capturing = False
-        self.log_entries = []
-        self.filtered_entries = []
+        self.log_entries: List[LogEntry] = []
+        self.filtered_entries: List[LogEntry] = []
+        self.tag_filters: Set[str] = set()
+        self.highlight_keywords: Set[str] = set()
+        
+        # Logcat components
+        self.logcat_handler = LogcatHandler(device_id)
+        self.logcat_worker = None
+        
+        # Statistics
+        self.entry_count = 0
+        self.last_entry_count = 0
+        self.entries_per_second = 0
         
         self.logger.info(f"Initializing logcat viewer for device: {device_id}")
         self.init_ui()
         self.setup_timer()
+        self.setup_logcat_callbacks()
         self.logger.info("Logcat viewer initialization complete")
+    
+    def setup_logcat_callbacks(self):
+        """Setup callbacks for logcat handler."""
+        self.logcat_handler.on_log_entry = self.on_new_log_entry
+        self.logcat_handler.on_error = self.on_logcat_error
+        self.logcat_handler.on_stream_status = self.on_stream_status_changed
     
     def init_ui(self):
         """Initialize the logging UI."""
@@ -87,6 +172,20 @@ class Logging(QWidget):
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self.stop_capture)
         controls_layout.addWidget(self.stop_btn)
+        
+        # Logcat format selection
+        controls_layout.addWidget(QLabel("Format:"))
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(LOGCAT_FORMATS)
+        self.format_combo.setCurrentText("time")
+        controls_layout.addWidget(self.format_combo)
+        
+        # Logcat buffer selection
+        controls_layout.addWidget(QLabel("Buffer:"))
+        self.buffer_combo = QComboBox()
+        self.buffer_combo.addItems(LOGCAT_BUFFERS)
+        self.buffer_combo.setCurrentText("main")
+        controls_layout.addWidget(self.buffer_combo)
         
         clear_btn = QPushButton("🗑️ Clear")
         clear_btn.clicked.connect(self.clear_logs)
@@ -296,10 +395,7 @@ class Logging(QWidget):
         return panel
     
     def setup_timer(self):
-        """Setup timer for simulating log capture."""
-        self.log_timer = QTimer()
-        self.log_timer.timeout.connect(self.simulate_log_entry)
-        
+        """Setup timer for statistics update."""
         self.rate_timer = QTimer()
         self.rate_timer.timeout.connect(self.update_capture_rate)
         self.rate_timer.start(1000)  # Update every second
@@ -316,23 +412,90 @@ class Logging(QWidget):
     
     def start_capture(self):
         """Start capturing logs."""
-        self.is_capturing = True
-        self.start_btn.setText("⏸️ Pause")
-        self.stop_btn.setEnabled(True)
-        self.status_label.setText("Status: Capturing...")
-        
-        # Start simulated log capture
-        self.log_timer.start(100)  # New log every 100ms
+        try:
+            self.is_capturing = True
+            self.start_btn.setText("⏸️ Pause")
+            self.stop_btn.setEnabled(True)
+            self.status_label.setText("Status: Starting capture...")
+            
+            # Get selected parameters
+            buffer = self.buffer_combo.currentText()
+            format_type = self.format_combo.currentText()
+            
+            # Create and start worker thread
+            self.logcat_worker = LogcatWorker(self.device_id)
+            self.logcat_worker.set_parameters(buffer, format_type)
+            self.logcat_worker.log_entry_received.connect(self.on_log_entry_received)
+            self.logcat_worker.stream_status_changed.connect(self.on_stream_status_changed)
+            self.logcat_worker.error_occurred.connect(self.on_logcat_error)
+            self.logcat_worker.start()
+            
+            self.logger.info(f"Started logcat capture for device: {self.device_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to start capture: {e}")
+            self.on_logcat_error(str(e))
+            self.stop_capture()
     
     def stop_capture(self):
         """Stop capturing logs."""
         self.is_capturing = False
         self.start_btn.setText("▶️ Start Capture")
         self.stop_btn.setEnabled(False)
-        self.status_label.setText("Status: Stopped")
+        self.status_label.setText("Status: Stopping...")
         
-        # Stop log capture
-        self.log_timer.stop()
+        if self.logcat_worker:
+            self.logcat_worker.stop_streaming()
+            self.logcat_worker.wait(5000)  # Wait up to 5 seconds
+            self.logcat_worker = None
+        
+        self.status_label.setText("Status: Stopped")
+        self.logger.info("Logcat capture stopped")
+    
+    def on_log_entry_received(self, log_entry):
+        """Handle new log entry from worker thread."""
+        # Convert to our LogEntry format for compatibility
+        entry = LogEntry(
+            timestamp=log_entry.timestamp,
+            level=log_entry.level,
+            tag=log_entry.tag,
+            pid=log_entry.pid,
+            message=log_entry.message
+        )
+        
+        self.on_new_log_entry(log_entry)
+    
+    def on_new_log_entry(self, log_entry):
+        """Handle new log entry."""
+        # Add to buffer
+        self.log_entries.append(log_entry)
+        
+        # Maintain buffer size
+        max_size = self.buffer_size_spin.value()
+        if len(self.log_entries) > max_size:
+            self.log_entries = self.log_entries[-max_size:]
+        
+        # Update count
+        self.entry_count += 1
+        
+        # Apply filters and update display
+        self.apply_filters()
+    
+    def on_stream_status_changed(self, is_streaming):
+        """Handle stream status change."""
+        if is_streaming:
+            self.status_label.setText("Status: Capturing...")
+        else:
+            if self.is_capturing:
+                self.status_label.setText("Status: Stream ended")
+                self.stop_capture()
+    
+    def on_logcat_error(self, error_msg):
+        """Handle logcat error."""
+        self.logger.error(f"Logcat error: {error_msg}")
+        self.status_label.setText(f"Status: Error - {error_msg}")
+        QMessageBox.warning(self, "Logcat Error", f"Logcat error occurred:\n{error_msg}")
+        self.stop_capture()
     
     def simulate_log_entry(self):
         """Simulate a new log entry (for demo purposes)."""
@@ -450,24 +613,64 @@ class Logging(QWidget):
     
     def clear_logs(self):
         """Clear all logs."""
-        self.log_entries.clear()
-        self.filtered_entries.clear()
-        self.log_display.clear()
-        self.entry_count = 0
-        self.entry_count_label.setText("Entries: 0")
+        reply = QMessageBox.question(
+            self, 
+            "Clear Logs", 
+            "Clear all logs? This will also clear the device logcat buffer.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # Clear local buffer
+            self.log_entries.clear()
+            self.filtered_entries.clear()
+            self.log_display.clear()
+            self.entry_count = 0
+            self.last_entry_count = 0
+            
+            # Clear device logcat buffer asynchronously
+            self._clear_device_logcat_async()
+            
+            self.entry_count_label.setText("Entries: 0 (Filtered: 0)")
+            self.logger.info("Logs cleared")
+    
+    def _clear_device_logcat_async(self):
+        """Clear device logcat buffer asynchronously."""
+        import threading
+        
+        def clear_logcat():
+            try:
+                asyncio.run(self.logcat_handler.clear_logcat())
+                self.logger.info("Device logcat buffer cleared")
+            except Exception as e:
+                self.logger.error(f"Error clearing device logcat: {e}")
+        
+        threading.Thread(target=clear_logcat, daemon=True).start()
     
     def save_logs(self):
         """Save logs to file."""
         filename, _ = QFileDialog.getSaveFileName(
-            self, 
-            "Save Logs", 
-            f"logcat_{self.device_id}.txt",
+            self,
+            "Save Logs",
+            f"logcat_{self.device_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
             "Text Files (*.txt);;All Files (*)"
         )
         
         if filename:
-            # TODO: Implement actual file saving
-            QMessageBox.information(self, "Save Logs", f"Logs saved to {filename}")
+            try:
+                entries_to_save = self.filtered_entries if self.export_filtered_only.isChecked() else self.log_entries
+                success = self.logcat_handler.export_logs(filename, entries_to_save)
+                
+                if success:
+                    QMessageBox.information(self, "Export Successful", f"Logs exported to {filename}")
+                    self.logger.info(f"Logs exported to {filename}")
+                else:
+                    QMessageBox.warning(self, "Export Failed", "Failed to export logs")
+                    
+            except Exception as e:
+                self.logger.error(f"Error saving logs: {e}")
+                QMessageBox.critical(self, "Error", f"Failed to save logs: {e}")
     
     def search_logs(self):
         """Search and filter logs based on search criteria."""
@@ -495,28 +698,48 @@ class Logging(QWidget):
         """Add a new tag filter."""
         tag = self.tag_filter_input.text().strip()
         if tag:
-            # TODO: Add tag filter widget
+            # Add tag to the tag filter list (if we have one)
+            # For now, just apply filters to see if tag exists in logs
+            self.apply_filters()
             self.tag_filter_input.clear()
+            self.logger.info(f"Tag filter applied: {tag}")
     
     def add_highlight_keyword(self):
         """Add a keyword for highlighting."""
         keyword = self.highlight_input.text().strip()
         if keyword:
-            # TODO: Implement keyword highlighting
+            # Store highlight keywords for future implementation
+            if not hasattr(self, 'highlight_keywords'):
+                self.highlight_keywords = []
+            self.highlight_keywords.append(keyword)
             self.highlight_input.clear()
+            self.logger.info(f"Highlight keyword added: {keyword}")
+            # Refresh display to apply highlighting
+            self.refresh_display()
     
     def export_logs(self):
         """Export logs with current filters applied."""
         filename, _ = QFileDialog.getSaveFileName(
             self, 
             "Export Logs", 
-            f"logcat_export_{self.device_id}.txt",
+            f"logcat_export_{self.device_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
             "Text Files (*.txt);;CSV Files (*.csv);;All Files (*)"
         )
         
         if filename:
-            # TODO: Implement actual export
-            QMessageBox.information(self, "Export Logs", f"Logs exported to {filename}")
+            try:
+                # Export currently filtered entries
+                success = self.logcat_handler.export_logs(filename, self.filtered_entries)
+                
+                if success:
+                    QMessageBox.information(self, "Export Successful", f"Logs exported to {filename}")
+                    self.logger.info(f"Filtered logs exported to {filename}")
+                else:
+                    QMessageBox.warning(self, "Export Failed", "Failed to export logs")
+                    
+            except Exception as e:
+                self.logger.error(f"Error exporting logs: {e}")
+                QMessageBox.critical(self, "Error", f"Failed to export logs: {e}")
     
     def update_capture_rate(self):
         """Update the capture rate display."""

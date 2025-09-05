@@ -36,6 +36,7 @@ The device discovery logic has been fully implemented for the ADB-UTIL applicati
 ## 🚀 Key Features Implemented
 
 ### Device Discovery
+
 - ✅ **Automatic device detection** via `adb devices`
 - ✅ **Real-time device monitoring** with configurable intervals
 - ✅ **Device property extraction** (model, manufacturer, Android version, etc.)
@@ -43,6 +44,7 @@ The device discovery logic has been fully implemented for the ADB-UTIL applicati
 - ✅ **Device status tracking** (online, offline, unauthorized)
 
 ### Device Management
+
 - ✅ **Async and sync APIs** for different use cases
 - ✅ **Device information caching** with automatic refresh
 - ✅ **Connect/disconnect event handling**
@@ -50,6 +52,7 @@ The device discovery logic has been fully implemented for the ADB-UTIL applicati
 - ✅ **ADB server management** (restart, status check)
 
 ### Command Execution
+
 - ✅ **ADB command execution** with timeout handling
 - ✅ **Shell command execution** on specific devices
 - ✅ **Property retrieval** and parsing
@@ -57,6 +60,7 @@ The device discovery logic has been fully implemented for the ADB-UTIL applicati
 - ✅ **Interactive shell session support**
 
 ### GUI Integration
+
 - ✅ **Threaded discovery** to prevent UI blocking
 - ✅ **Real-time device list updates** with status indicators
 - ✅ **Device selection** for tab operations
@@ -66,6 +70,7 @@ The device discovery logic has been fully implemented for the ADB-UTIL applicati
 ## 📊 Performance Metrics
 
 Based on comprehensive testing:
+
 - **Discovery Speed**: ~0.08 seconds average
 - **Device Properties**: 500+ properties retrieved per device
 - **Memory Efficient**: Minimal resource usage
@@ -76,30 +81,36 @@ Based on comprehensive testing:
 ### Device Discovery Process
 
 1. **ADB Availability Check**
+
    ```python
    adb_available = device_utils.is_adb_available()
    ```
 
 2. **Device List Retrieval**
+
    ```bash
    adb devices
    ```
 
 3. **Device Information Gathering**
+
    ```bash
    adb -s {device_id} shell getprop
    ```
 
 4. **Device Object Creation**
+
    ```python
    device = Device(id=device_id, status=status, ...)
    ```
 
 ### Connection Type Detection
+
 - **USB devices**: Standard device IDs (e.g., `ABC123DEF456`)
 - **TCP/IP devices**: IP:Port format (e.g., `192.168.1.100:5555`)
 
 ### Property Parsing
+
 - **Pattern**: `[property.name]: [value]`
 - **Key Properties**:
   - `ro.product.model` → Device name
@@ -110,6 +121,7 @@ Based on comprehensive testing:
 ## 🎯 Usage Examples
 
 ### Basic Device Discovery
+
 ```python
 from utils.device_utils import discover_devices
 
@@ -119,6 +131,7 @@ for device in devices:
 ```
 
 ### Async Device Management
+
 ```python
 device_manager = DeviceManager()
 devices = await device_manager.discover_devices()
@@ -128,12 +141,14 @@ device_manager.start_monitoring()
 ```
 
 ### Command Execution
+
 ```python
 command_runner = CommandRunner(device_id)
 stdout, stderr, return_code = await command_runner.execute_shell_command("ls")
 ```
 
 ### Device Properties
+
 ```python
 from utils.device_utils import get_device_quick_info
 
@@ -157,6 +172,7 @@ print(f"Model: {info['model']}, Android: {info['android_version']}")
    - Utility function testing
 
 ### Test Results
+
 - ✅ **ADB availability detection**: Working
 - ✅ **Device discovery**: 1 device found (emulator-5554)
 - ✅ **Property retrieval**: 538 properties extracted
@@ -168,17 +184,20 @@ print(f"Model: {info['model']}, Android: {info['android_version']}")
 ## 🔄 Integration Points
 
 ### Main Application
+
 - Device list displayed in left panel
 - Real-time status updates in status bar
 - Device selection for tab operations
 - Automatic ADB status monitoring
 
 ### Tab System
+
 - Device-specific tabs (File Manager, Terminal, Logging, Utils)
 - Device validation before tab creation
 - Graceful handling of offline devices
 
 ### Logging Integration
+
 - Comprehensive logging throughout discovery process
 - Device operation logging with context
 - Error tracking and debugging support
@@ -186,6 +205,7 @@ print(f"Model: {info['model']}, Android: {info['android_version']}")
 ## 🛠️ Configuration
 
 ### Constants (`src/utils/constants.py`)
+
 ```python
 ADB_DEVICES_COMMAND = "adb devices"
 DEVICE_DISCOVERY_TIMEOUT = 10
@@ -194,6 +214,7 @@ COMMAND_TIMEOUT = 30
 ```
 
 ### Device States
+
 - `DEVICE_STATE_DEVICE` = "device" (online)
 - `DEVICE_STATE_OFFLINE` = "offline"
 - `DEVICE_STATE_UNAUTHORIZED` = "unauthorized"
@@ -202,6 +223,7 @@ COMMAND_TIMEOUT = 30
 ## 🎉 Implementation Status
 
 ### ✅ Completed Features
+
 - [x] Device discovery logic
 - [x] Async and sync APIs
 - [x] Device property extraction
@@ -214,7 +236,9 @@ COMMAND_TIMEOUT = 30
 - [x] Performance optimization
 
 ### 🚀 Ready for Production
+
 The device discovery system is fully implemented and tested, providing:
+
 - **Reliable device detection**
 - **Real-time status updates**
 - **Comprehensive device information**
@@ -227,6 +251,7 @@ The implementation successfully handles device connect/disconnect events, provid
 ## 📝 Next Steps
 
 With device discovery complete, the application is ready for:
+
 1. **File operations implementation** (push, pull, sync)
 2. **Terminal functionality** (interactive shell, command history)
 3. **Logcat integration** (real-time log viewing, filtering)

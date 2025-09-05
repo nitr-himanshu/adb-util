@@ -23,6 +23,16 @@ ADB_PUSH_COMMAND = "adb -s {device_id} push {local_path} {device_path}"
 ADB_PULL_COMMAND = "adb -s {device_id} pull {device_path} {local_path}"
 ADB_GETPROP_COMMAND = "adb -s {device_id} shell getprop"
 
+# Logcat specific commands
+ADB_LOGCAT_CLEAR = "adb -s {device_id} logcat -c"
+ADB_LOGCAT_DUMP = "adb -s {device_id} logcat -d"
+
+# Logcat formats
+LOGCAT_FORMATS = ["brief", "process", "tag", "raw", "time", "threadtime", "long"]
+
+# Logcat buffers
+LOGCAT_BUFFERS = ["main", "system", "radio", "events", "crash", "all"]
+
 # Device States
 DEVICE_STATE_DEVICE = "device"
 DEVICE_STATE_OFFLINE = "offline"
