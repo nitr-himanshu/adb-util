@@ -152,6 +152,127 @@ sudo apt install android-tools-adb
 - **Port forwarding**: Setup ADB port forwarding tunnels
 - **Screenshots**: Capture device screenshots
 
+## Logcat Formats and Buffer Levels
+
+### Logcat Output Formats
+
+The logging interface supports various output formats for different analysis needs:
+
+#### Available Formats
+
+| Format | Description | Example Output |
+|--------|-------------|----------------|
+| **brief** | Minimal format with priority, tag, and message | `I/ActivityManager: Starting activity` |
+| **process** | Includes PID in addition to brief format | `I(12345) Starting activity (ActivityManager)` |
+| **tag** | Shows priority and tag only | `I/ActivityManager: Starting activity` |
+| **raw** | Raw log message without any formatting | `Starting activity` |
+| **time** | Includes timestamp, priority, tag, PID | `01-02 03:04:05.678 I/ActivityManager(12345): Starting activity` |
+| **threadtime** | Most detailed - timestamp, PID, TID, priority, tag | `01-02 03:04:05.678 12345 12367 I ActivityManager: Starting activity` |
+| **long** | Multi-line format with full metadata | ```[ 01-02 03:04:05.678 12345:12367 I/ActivityManager ]<br>Starting activity``` |
+
+#### Recommended Formats
+
+- **time**: Best for general debugging and log analysis
+- **threadtime**: Ideal for performance analysis and threading issues
+- **brief**: Good for quick overview and log filtering
+- **raw**: Useful when processing logs with external tools
+
+### Logcat Buffer Levels
+
+Android maintains separate log buffers for different system components:
+
+#### Available Buffers
+
+| Buffer | Purpose | Content |
+|--------|---------|---------|
+| **main** | Default application logs | App-generated logs, system services |
+| **system** | System-level logs | Android framework, system processes |
+| **radio** | Radio/telephony logs | Cellular, WiFi, Bluetooth communication |
+| **events** | System events | Binary format events, performance metrics |
+| **crash** | Crash dumps | Native crashes, tombstones |
+| **all** | Combined buffer | All buffers merged (can be verbose) |
+
+#### Buffer Selection Guide
+
+**For App Development:**
+
+- Use `main` buffer for general application debugging
+- Add `system` for framework-related issues
+- Use `crash` when debugging native crashes
+
+**For System Analysis:**
+
+- Use `system` for Android framework debugging
+- Use `radio` for connectivity issues
+- Use `events` for performance monitoring
+
+**For Comprehensive Debugging:**
+
+- Use `all` to capture everything (warning: high volume)
+- Filter by log levels to manage output volume
+
+### Log Levels
+
+Each log entry has a priority level indicating its importance:
+
+| Level | Code | Color | Purpose |
+|-------|------|-------|---------|
+| **Verbose** | V | Gray | Detailed tracing information |
+| **Debug** | D | Green | Debug messages for development |
+| **Info** | I | Blue | General information messages |
+| **Warning** | W | Yellow | Warning conditions |
+| **Error** | E | Orange | Error conditions |
+| **Fatal** | F | Red | Critical errors causing crashes |
+
+### Usage Examples
+
+**Real-time Monitoring:**
+
+```bash
+# Start capture with time format and main buffer
+Format: time, Buffer: main
+```
+
+**Performance Analysis:**
+
+```bash
+# Use threadtime format to see thread IDs
+Format: threadtime, Buffer: main
+```
+
+**Network Debugging:**
+
+```bash
+# Monitor radio buffer for connectivity issues
+Format: time, Buffer: radio
+```
+
+**System Debugging:**
+
+```bash
+# Monitor system buffer with verbose logging
+Format: threadtime, Buffer: system
+Level Filter: All levels enabled
+```
+
+### Filtering and Search
+
+The logging interface provides powerful filtering options:
+
+- **Level Filtering**: Enable/disable specific log levels
+- **PID Filtering**: Show logs from specific process IDs
+- **Tag Filtering**: Filter by application or component tags
+- **Text Search**: Regex and case-sensitive search
+- **Keyword Highlighting**: Highlight important terms
+
+### Export Options
+
+Captured logs can be exported in various formats:
+
+- **Filtered Export**: Export only logs matching current filters
+- **Timestamp Options**: Include/exclude timestamps
+- **Format Preservation**: Maintain original log formatting
+
 ## Project Structure
 
 ```text

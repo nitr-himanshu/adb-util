@@ -107,9 +107,10 @@ class LogcatHandler:
             # Read logcat output line by line
             while self.is_streaming and self.logcat_process:
                 try:
+                    # Use shorter timeout for more responsive stop
                     line = await asyncio.wait_for(
                         self.logcat_process.stdout.readline(),
-                        timeout=1.0
+                        timeout=0.5
                     )
                     
                     if not line:
@@ -158,10 +159,17 @@ class LogcatHandler:
         
         if self.logcat_process:
             try:
+                # First try graceful termination with shorter timeout
                 self.logcat_process.terminate()
-                await asyncio.wait_for(self.logcat_process.wait(), timeout=5.0)
+                await asyncio.wait_for(self.logcat_process.wait(), timeout=2.0)
             except asyncio.TimeoutError:
+                # Force kill if graceful termination takes too long
+                self.logger.warning("Logcat process termination timeout, forcing kill")
                 self.logcat_process.kill()
+                try:
+                    await asyncio.wait_for(self.logcat_process.wait(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    self.logger.error("Failed to kill logcat process")
             except Exception as e:
                 self.logger.error(f"Error stopping logcat process: {e}")
             finally:

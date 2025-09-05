@@ -418,10 +418,14 @@ class Logging(QWidget):
     def start_capture(self):
         """Start capturing logs."""
         try:
+            # Provide immediate feedback
             self.is_capturing = True
             self.start_btn.setText("⏸️ Pause")
             self.stop_btn.setEnabled(True)
-            self.status_label.setText("Status: Starting capture...")
+            self.status_label.setText("Status: Starting...")
+            
+            # Process UI events to show immediate feedback
+            QApplication.processEvents()
             
             # Get selected parameters
             buffer = self.buffer_combo.currentText()
@@ -444,28 +448,70 @@ class Logging(QWidget):
     
     def stop_capture(self):
         """Stop capturing logs."""
+        # Provide immediate feedback
         self.is_capturing = False
         self.start_btn.setText("▶️ Start Capture")
         self.stop_btn.setEnabled(False)
         self.status_label.setText("Status: Stopping...")
         
+        # Process UI events to show immediate feedback
+        QApplication.processEvents()
+        
         if self.logcat_worker and self.logcat_worker.isRunning():
             try:
+                # Start non-blocking stop process
                 self.logcat_worker.stop_streaming()
                 
-                # Use a non-blocking approach
-                if not self.logcat_worker.wait(3000):  # Wait 3 seconds max
-                    self.logger.warning("Worker thread didn't stop gracefully, terminating...")
-                    self.logcat_worker.terminate()
-                    self.logcat_worker.wait(1000)  # Wait 1 more second
-                    
+                # Use QTimer for non-blocking cleanup
+                self.cleanup_timer = QTimer()
+                self.cleanup_timer.setSingleShot(True)
+                self.cleanup_timer.timeout.connect(self._cleanup_worker)
+                self.cleanup_timer.start(100)  # Check after 100ms
+                
             except Exception as e:
                 self.logger.error(f"Error stopping worker: {e}")
-            finally:
+                self._cleanup_worker()
+        else:
+            self.status_label.setText("Status: Stopped")
+            self.logger.info("Logcat capture stopped")
+    
+    def _cleanup_worker(self):
+        """Clean up worker thread (called by timer)."""
+        if not self.logcat_worker:
+            return
+            
+        try:
+            if not self.logcat_worker.isRunning():
+                # Worker stopped gracefully
                 self.logcat_worker = None
-        
-        self.status_label.setText("Status: Stopped")
-        self.logger.info("Logcat capture stopped")
+                self.status_label.setText("Status: Stopped")
+                self.logger.info("Logcat capture stopped")
+                return
+            
+            # Check if we should wait more or force stop
+            if not hasattr(self, '_stop_attempts'):
+                self._stop_attempts = 0
+            
+            self._stop_attempts += 1
+            
+            if self._stop_attempts < 10:  # Wait up to 1 second (10 * 100ms)
+                self.cleanup_timer.start(100)  # Check again in 100ms
+            else:
+                # Force terminate after 1 second
+                self.logger.warning("Worker thread didn't stop gracefully, terminating...")
+                self.logcat_worker.terminate()
+                if not self.logcat_worker.wait(500):
+                    self.logcat_worker.kill()
+                self.logcat_worker = None
+                self._stop_attempts = 0
+                self.status_label.setText("Status: Stopped")
+                self.logger.info("Logcat capture stopped (forced)")
+                
+        except Exception as e:
+            self.logger.error(f"Error in worker cleanup: {e}")
+            self.logcat_worker = None
+            self._stop_attempts = 0
+            self.status_label.setText("Status: Stopped")
     
     def on_log_entry_received(self, log_entry):
         """Handle new log entry from worker thread."""
