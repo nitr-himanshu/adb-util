@@ -5,7 +5,13 @@
             "label": "Install Dependencies",
             "type": "shell",
             "command": "${config:python.defaultInterpreterPath}",
-            "args": ["-m", "pip", "install", "-r", "requirements.txt"],
+            "args": [
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                "requirements.txt"
+            ],
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -19,7 +25,12 @@
             "label": "Run Tests",
             "type": "shell",
             "command": "${config:python.defaultInterpreterPath}",
-            "args": ["-m", "pytest", "tests/", "-v"],
+            "args": [
+                "-m",
+                "pytest",
+                "tests/",
+                "-v"
+            ],
             "group": "test",
             "presentation": {
                 "echo": true,
@@ -33,7 +44,13 @@
             "label": "Format Code (Black)",
             "type": "shell",
             "command": "${config:python.defaultInterpreterPath}",
-            "args": ["-m", "black", "src/", "tests/", "main.py"],
+            "args": [
+                "-m",
+                "black",
+                "src/",
+                "tests/",
+                "main.py"
+            ],
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -47,7 +64,13 @@
             "label": "Lint Code (Flake8)",
             "type": "shell",
             "command": "${config:python.defaultInterpreterPath}",
-            "args": ["-m", "flake8", "src/", "tests/", "main.py"],
+            "args": [
+                "-m",
+                "flake8",
+                "src/",
+                "tests/",
+                "main.py"
+            ],
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -61,7 +84,11 @@
             "label": "Type Check (MyPy)",
             "type": "shell",
             "command": "${config:python.defaultInterpreterPath}",
-            "args": ["-m", "mypy", "src/"],
+            "args": [
+                "-m",
+                "mypy",
+                "src/"
+            ],
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -75,7 +102,9 @@
             "label": "Run ADB-UTIL",
             "type": "shell",
             "command": "${config:python.defaultInterpreterPath}",
-            "args": ["main.py"],
+            "args": [
+                "main.py"
+            ],
             "group": "build",
             "presentation": {
                 "echo": true,
