@@ -4,15 +4,14 @@ Main Application Window
 Main window class that contains the tab management system and overall application layout.
 """
 
-import asyncio
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QTabWidget, QMenuBar, QStatusBar, QLabel, 
     QPushButton, QListWidget, QGridLayout, QFrame,
     QMessageBox, QSplitter, QListWidgetItem
 )
-from PyQt6.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QIcon, QFont, QAction
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt6.QtGui import QFont, QAction
 
 from adb.device_manager import DeviceManager
 from models.device import Device
