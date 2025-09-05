@@ -19,6 +19,7 @@ from models.device import Device
 from utils.logger import get_logger
 from utils.constants import TAB_MODES
 from utils.device_utils import device_utils
+from utils.theme_manager import theme_manager
 
 
 class DeviceDiscoveryWorker(QThread):
@@ -72,6 +73,9 @@ class MainWindow(QMainWindow):
         # Timer for periodic device refresh
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.auto_refresh_devices)
+        
+        # Initialize theme manager
+        self.init_theme_manager()
         
         self.logger.info("Initializing main window...")
         self.init_ui()
@@ -196,6 +200,28 @@ class MainWindow(QMainWindow):
         preferences_action.triggered.connect(self.show_preferences)
         tools_menu.addAction(preferences_action)
         
+        tools_menu.addSeparator()
+        
+        # Theme submenu
+        theme_menu = tools_menu.addMenu("&Theme")
+        
+        light_theme_action = QAction("☀️ &Light Mode", self)
+        light_theme_action.setShortcut("Ctrl+L")
+        light_theme_action.triggered.connect(lambda: self.set_theme("light"))
+        theme_menu.addAction(light_theme_action)
+        
+        dark_theme_action = QAction("🌙 &Dark Mode", self)
+        dark_theme_action.setShortcut("Ctrl+D")
+        dark_theme_action.triggered.connect(lambda: self.set_theme("dark"))
+        theme_menu.addAction(dark_theme_action)
+        
+        theme_menu.addSeparator()
+        
+        toggle_theme_action = QAction("🔄 &Toggle Theme", self)
+        toggle_theme_action.setShortcut("Ctrl+T")
+        toggle_theme_action.triggered.connect(self.toggle_theme)
+        theme_menu.addAction(toggle_theme_action)
+        
         # Help menu
         help_menu = menubar.addMenu("&Help")
         
@@ -209,6 +235,22 @@ class MainWindow(QMainWindow):
         
         self.status_label = QLabel("Ready")
         status_bar.addWidget(self.status_label)
+        
+        # Add stretch to push right-side widgets to the right
+        status_bar.addWidget(QLabel(), 1)  # Stretch widget
+        
+        # Theme toggle buttons
+        self.light_theme_btn = QPushButton("☀️")
+        self.light_theme_btn.setToolTip("Switch to Light Mode (Ctrl+L)")
+        self.light_theme_btn.setMaximumSize(30, 25)
+        self.light_theme_btn.clicked.connect(lambda: self.set_theme("light"))
+        status_bar.addPermanentWidget(self.light_theme_btn)
+        
+        self.dark_theme_btn = QPushButton("🌙")
+        self.dark_theme_btn.setToolTip("Switch to Dark Mode (Ctrl+D)")
+        self.dark_theme_btn.setMaximumSize(30, 25)
+        self.dark_theme_btn.clicked.connect(lambda: self.set_theme("dark"))
+        status_bar.addPermanentWidget(self.dark_theme_btn)
         
         # Device count
         self.device_count_label = QLabel("Devices: 0")
@@ -238,7 +280,7 @@ class MainWindow(QMainWindow):
         subtitle_label = QLabel("Android Debug Bridge Utility")
         subtitle_label.setFont(QFont("Arial", 14))
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_label.setStyleSheet("color: gray;")
+        subtitle_label.setObjectName("subtitle_label")
         layout.addWidget(subtitle_label)
         
         layout.addSpacing(30)
@@ -258,7 +300,7 @@ class MainWindow(QMainWindow):
         """)
         instructions_label.setFont(QFont("Arial", 12))
         instructions_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        instructions_label.setStyleSheet("background-color: #f0f0f0; padding: 20px; border-radius: 10px;")
+        instructions_label.setObjectName("instructions_label")
         layout.addWidget(instructions_label)
         
         return widget
@@ -440,3 +482,58 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Error opening preferences dialog: {e}", exc_info=True)
             QMessageBox.critical(self, "Error", f"Failed to open preferences: {e}")
+    
+    def init_theme_manager(self):
+        """Initialize theme manager and load saved preferences."""
+        try:
+            # Load saved theme preference
+            theme_manager.load_theme_preference()
+            
+            # Connect theme change signal
+            theme_manager.theme_changed.connect(self.on_theme_changed)
+            
+            self.logger.info(f"Theme manager initialized with {theme_manager.get_current_theme()} theme")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize theme manager: {e}")
+    
+    def set_theme(self, theme_name: str):
+        """Set the application theme."""
+        try:
+            theme_manager.set_theme(theme_name)
+            theme_manager.save_theme_preference()
+            self.logger.info(f"Theme changed to {theme_name}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to set theme to {theme_name}: {e}")
+    
+    def toggle_theme(self):
+        """Toggle between light and dark themes."""
+        try:
+            theme_manager.toggle_theme()
+            theme_manager.save_theme_preference()
+            self.logger.info(f"Theme toggled to {theme_manager.get_current_theme()}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to toggle theme: {e}")
+    
+    def on_theme_changed(self, theme_name: str):
+        """Handle theme change event."""
+        try:
+            # Update button states to show current theme
+            if hasattr(self, 'light_theme_btn') and hasattr(self, 'dark_theme_btn'):
+                if theme_name == "light":
+                    self.light_theme_btn.setStyleSheet("background-color: #007acc; color: white;")
+                    self.dark_theme_btn.setStyleSheet("")
+                else:
+                    self.dark_theme_btn.setStyleSheet("background-color: #007acc; color: white;")
+                    self.light_theme_btn.setStyleSheet("")
+            
+            # Update status bar message
+            if hasattr(self, 'status_label'):
+                self.status_label.setText(f"Theme changed to {theme_name.title()} Mode")
+                
+            self.logger.debug(f"Theme change handled: {theme_name}")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling theme change: {e}")
