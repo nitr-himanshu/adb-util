@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLabel,
     QPushButton, QDialog, QMessageBox, QFrame, QStatusBar,
     QMenuBar, QMenu, QFileDialog, QInputDialog, QSplitter,
-    QPlainTextEdit, QCheckBox, QSpinBox, QComboBox
+    QPlainTextEdit, QCheckBox, QSpinBox, QComboBox, QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QThread
 from PyQt6.QtGui import (
@@ -26,7 +26,7 @@ from PyQt6.QtGui import (
 
 from src.adb.file_operations import FileOperations, FileInfo
 from src.utils.logger import get_logger
-from src.utils.theme_manager import ThemeManager
+from src.utils.theme_manager import theme_manager
 
 
 class LineNumberArea(QWidget):
@@ -50,13 +50,12 @@ class CodeEditor(QPlainTextEdit):
         super().__init__(parent)
         
         self.line_number_area = LineNumberArea(self)
-        self.theme_manager = ThemeManager()
         
         # Connect signals
         self.blockCountChanged.connect(self.update_line_number_area_width)
         self.updateRequest.connect(self.update_line_number_area)
         self.cursorPositionChanged.connect(self.highlight_current_line)
-        self.theme_manager.theme_changed.connect(self.apply_theme)
+        theme_manager.theme_changed.connect(self.apply_theme)
         
         # Initial setup
         self.update_line_number_area_width(0)
@@ -72,7 +71,7 @@ class CodeEditor(QPlainTextEdit):
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
         
         # Apply initial theme
-        self.apply_theme(self.theme_manager.get_current_theme())
+        self.apply_theme(theme_manager.get_current_theme())
         
     def line_number_area_width(self):
         """Calculate the width needed for line numbers."""
@@ -115,12 +114,13 @@ class CodeEditor(QPlainTextEdit):
         """Paint the line numbers."""
         painter = QPainter(self.line_number_area)
         
-        # Get theme colors
-        theme_colors = self.theme_manager.get_theme_colors()
-        current_theme = self.theme_manager.get_current_theme()
+        # Get theme colors using app detection
+        app = QApplication.instance()
+        app_stylesheet = app.styleSheet() if app else ""
+        is_dark_theme = "#2b2b2b" in app_stylesheet or "dark" in app_stylesheet.lower()
         
         # Set colors based on theme
-        if current_theme == "dark":
+        if is_dark_theme:
             bg_color = QColor("#363636")
             text_color = QColor("#bbbbbb")
         else:
@@ -157,11 +157,14 @@ class CodeEditor(QPlainTextEdit):
         if not self.isReadOnly():
             selection = QTextEdit.ExtraSelection()
             
-            # Get theme-appropriate colors
-            current_theme = self.theme_manager.get_current_theme()
-            if current_theme == "dark":
-                # Dark theme: subtle blue highlight
-                line_color = QColor("#2d4f67")  # Dark blue-gray
+            # Get theme-appropriate colors using app detection
+            app = QApplication.instance()
+            app_stylesheet = app.styleSheet() if app else ""
+            is_dark_theme = "#2b2b2b" in app_stylesheet or "dark" in app_stylesheet.lower()
+            
+            if is_dark_theme:
+                # Dark theme: very subtle highlight that doesn't interfere with text
+                line_color = QColor("#2a2a2a")  # Very subtle gray, barely darker than background
             else:
                 # Light theme: subtle yellow highlight
                 line_color = QColor("#fffacd")  # Light yellow
@@ -176,17 +179,22 @@ class CodeEditor(QPlainTextEdit):
         
     def apply_theme(self, theme_name: str):
         """Apply theme styling to the editor."""
-        theme_colors = self.theme_manager.get_theme_colors()
-        
         if theme_name == "dark":
+            # Dark theme colors
+            bg_color = "#1e1e1e"
+            text_color = "#ffffff"
+            border_color = "#555555"
+            selection_bg = "#264f78"
+            selection_fg = "#ffffff"
+            
             style = f"""
                 QPlainTextEdit {{
-                    background-color: #1e1e1e;
-                    color: #ffffff;
-                    border: 1px solid #555555;
+                    background-color: {bg_color};
+                    color: {text_color};
+                    border: 1px solid {border_color};
                     border-radius: 4px;
-                    selection-background-color: #264f78;
-                    selection-color: #ffffff;
+                    selection-background-color: {selection_bg};
+                    selection-color: {selection_fg};
                     font-family: 'Consolas', 'Courier New', monospace;
                 }}
                 
@@ -195,15 +203,31 @@ class CodeEditor(QPlainTextEdit):
                     border-width: 2px;
                 }}
             """
+            
+            # Also set palette colors directly
+            palette = self.palette()
+            palette.setColor(QPalette.ColorRole.Base, QColor(bg_color))
+            palette.setColor(QPalette.ColorRole.Text, QColor(text_color))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor(selection_bg))
+            palette.setColor(QPalette.ColorRole.HighlightedText, QColor(selection_fg))
+            self.setPalette(palette)
+            
         else:
+            # Light theme colors
+            bg_color = "#ffffff"
+            text_color = "#000000"
+            border_color = "#c0c0c0"
+            selection_bg = "#316ac5"
+            selection_fg = "#ffffff"
+            
             style = f"""
                 QPlainTextEdit {{
-                    background-color: #ffffff;
-                    color: #000000;
-                    border: 1px solid #c0c0c0;
+                    background-color: {bg_color};
+                    color: {text_color};
+                    border: 1px solid {border_color};
                     border-radius: 4px;
-                    selection-background-color: #316ac5;
-                    selection-color: #ffffff;
+                    selection-background-color: {selection_bg};
+                    selection-color: {selection_fg};
                     font-family: 'Consolas', 'Courier New', monospace;
                 }}
                 
@@ -212,6 +236,14 @@ class CodeEditor(QPlainTextEdit):
                     border-width: 2px;
                 }}
             """
+            
+            # Also set palette colors directly
+            palette = self.palette()
+            palette.setColor(QPalette.ColorRole.Base, QColor(bg_color))
+            palette.setColor(QPalette.ColorRole.Text, QColor(text_color))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor(selection_bg))
+            palette.setColor(QPalette.ColorRole.HighlightedText, QColor(selection_fg))
+            self.setPalette(palette)
             
         self.setStyleSheet(style)
         
@@ -283,17 +315,23 @@ class IntegratedTextEditor(QDialog):
         self.original_content = ""
         self.upload_worker = None
         
-        # Theme manager
-        self.theme_manager = ThemeManager()
-        
         # Create editor first
         self.editor = CodeEditor()
         
         self.setup_ui()
-        self.apply_theme(self.theme_manager.get_current_theme())
+        
+        # Get theme from application stylesheet to ensure accuracy
+        app = QApplication.instance()
+        app_stylesheet = app.styleSheet() if app else ""
+        
+        # Detect theme from application state (more reliable than theme manager)
+        detected_theme = "dark" if "#2b2b2b" in app_stylesheet or "dark" in app_stylesheet.lower() else "light"
+        
+        # Apply the detected theme
+        self.apply_theme(detected_theme)
         
         # Connect theme changes
-        self.theme_manager.theme_changed.connect(self.apply_theme)
+        theme_manager.theme_changed.connect(self.apply_theme)
         
         self.load_file_content()
         
@@ -645,7 +683,7 @@ class IntegratedTextEditor(QDialog):
         
     def apply_theme(self, theme_name: str):
         """Apply theme styling to the dialog."""
-        theme_colors = self.theme_manager.get_theme_colors()
+        theme_colors = theme_manager.get_theme_colors()
         
         if theme_name == "dark":
             style = f"""
@@ -761,6 +799,15 @@ class IntegratedTextEditor(QDialog):
             """
             
         self.setStyleSheet(style)
+        
+        # Apply theme to the embedded CodeEditor (this is the important part!)
+        if hasattr(self, 'editor'):
+            self.editor.apply_theme(theme_name)
+            # Force immediate update
+            self.editor.update()
+            self.editor.line_number_area.update()
+            # Force repaint
+            self.editor.repaint()
 
 
 class FileDownloadWorker(QThread):
