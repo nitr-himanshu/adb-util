@@ -512,16 +512,16 @@ class FileManager(QWidget):
         return panel
     
     def create_progress_panel(self):
-        """Create the file transfer progress panel with theme toggle."""
+        """Create the file transfer progress panel."""
         panel = QFrame()
         panel.setFrameStyle(QFrame.Shape.StyledPanel)
-        panel.setMaximumHeight(50)  # Slightly larger to accommodate theme button
-        panel.setMinimumHeight(50)
+        panel.setMaximumHeight(30)  # Reduced height since no theme button
+        panel.setMinimumHeight(30)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(4, 2, 4, 2)  # Minimal margins
         layout.setSpacing(2)  # Small spacing
         
-        # Progress info - first row
+        # Progress info
         progress_layout = QHBoxLayout()
         progress_layout.setContentsMargins(0, 0, 0, 0)
         progress_layout.setSpacing(6)
@@ -537,62 +537,6 @@ class FileManager(QWidget):
         progress_layout.addWidget(self.speed_label)
         
         layout.addLayout(progress_layout)
-        
-        # Theme toggle row - second row
-        theme_layout = QHBoxLayout()
-        theme_layout.setContentsMargins(0, 0, 0, 0)
-        theme_layout.setSpacing(6)
-        
-        theme_layout.addStretch()  # Center the button
-        
-        # Theme toggle button
-        from utils.theme_manager import theme_manager
-        current_theme = theme_manager.get_current_theme()
-        theme_icon = "🌙" if current_theme == "dark" else "☀️"
-        theme_text = "Dark Mode" if current_theme == "light" else "Light Mode"
-        
-        self.theme_toggle_btn = QPushButton(f"{theme_icon} {theme_text}")
-        self.theme_toggle_btn.setFont(QFont("Arial", 8))
-        self.theme_toggle_btn.setMinimumWidth(100)
-        self.theme_toggle_btn.setMaximumWidth(100)
-        self.theme_toggle_btn.setMaximumHeight(20)
-        self.theme_toggle_btn.setToolTip(f"Switch to {theme_text.lower()}")
-        self.theme_toggle_btn.clicked.connect(self.toggle_theme)
-        
-        # Style the button based on current theme
-        if current_theme == "dark":
-            self.theme_toggle_btn.setStyleSheet("""
-                QPushButton {
-                    color: #FFD700; 
-                    border: 1px solid #555; 
-                    border-radius: 3px; 
-                    padding: 2px;
-                    background-color: #2d2d2d;
-                }
-                QPushButton:hover {
-                    background-color: #3d3d3d;
-                    border-color: #777;
-                }
-            """)
-        else:
-            self.theme_toggle_btn.setStyleSheet("""
-                QPushButton {
-                    color: #4169E1; 
-                    border: 1px solid #ccc; 
-                    border-radius: 3px; 
-                    padding: 2px;
-                    background-color: #f5f5f5;
-                }
-                QPushButton:hover {
-                    background-color: #e5e5e5;
-                    border-color: #999;
-                }
-            """)
-        
-        theme_layout.addWidget(self.theme_toggle_btn)
-        theme_layout.addStretch()  # Center the button
-        
-        layout.addLayout(theme_layout)
         
         # Progress bar - inline with text
         self.progress_bar = QProgressBar()
@@ -1147,63 +1091,51 @@ class FileManager(QWidget):
             self.populate_device_path_combo()
             QMessageBox.information(self, "Bookmark Added", f"Bookmarked: {name}")
     
-    def toggle_theme(self):
-        """Toggle between light and dark theme."""
-        try:
-            from utils.theme_manager import theme_manager
-            
-            # Toggle theme
-            theme_manager.toggle_theme()
-            current_theme = theme_manager.get_current_theme()
-            
-            # Update button text and style
-            theme_icon = "🌙" if current_theme == "dark" else "☀️"
-            theme_text = "Dark Mode" if current_theme == "light" else "Light Mode"
-            
-            self.theme_toggle_btn.setText(f"{theme_icon} {theme_text}")
-            self.theme_toggle_btn.setToolTip(f"Switch to {theme_text.lower()}")
-            
-            # Update button style based on new theme
-            if current_theme == "dark":
-                self.theme_toggle_btn.setStyleSheet("""
-                    QPushButton {
-                        color: #FFD700; 
-                        border: 1px solid #555; 
-                        border-radius: 3px; 
-                        padding: 2px;
-                        background-color: #2d2d2d;
-                    }
-                    QPushButton:hover {
-                        background-color: #3d3d3d;
-                        border-color: #777;
-                    }
-                """)
-            else:
-                self.theme_toggle_btn.setStyleSheet("""
-                    QPushButton {
-                        color: #4169E1; 
-                        border: 1px solid #ccc; 
-                        border-radius: 3px; 
-                        padding: 2px;
-                        background-color: #f5f5f5;
-                    }
-                    QPushButton:hover {
-                        background-color: #e5e5e5;
-                        border-color: #999;
-                    }
-                """)
-                
-            self.logger.info(f"Theme switched to: {current_theme}")
-            
-        except Exception as e:
-            self.logger.error(f"Error toggling theme: {e}")
-            QMessageBox.warning(self, "Theme Error", f"Failed to switch theme: {e}")
-    
     def closeEvent(self, event):
         """Handle widget close event."""
         self.cleanup()
         super().closeEvent(event)
     
+    def cleanup(self):
+        """Clean up resources."""
+        try:
+            if self.transfer_worker and self.transfer_worker.isRunning():
+                self.transfer_worker.terminate()
+                self.transfer_worker.wait(1000)
+            
+            if self.listing_worker and self.listing_worker.isRunning():
+                self.listing_worker.terminate()
+                self.listing_worker.wait(1000)
+                
+            self.logger.info("File manager cleanup completed")
+            
+        except Exception as e:
+            self.logger.error(f"Error reloading device list model: {e}")
+                
+    def refresh_theme(self):
+        """Refresh theme-related styling for file manager components."""
+        try:
+            # Force style refresh on tree views
+            if hasattr(self, 'local_tree') and self.local_tree:
+                self.local_tree.style().unpolish(self.local_tree)
+                self.local_tree.style().polish(self.local_tree)
+                self.local_tree.update()
+                
+            if hasattr(self, 'device_list') and self.device_list:
+                self.device_list.style().unpolish(self.device_list)
+                self.device_list.style().polish(self.device_list)
+                self.device_list.update()
+                
+            # Force refresh on the entire widget
+            self.style().unpolish(self)
+            self.style().polish(self)
+            self.update()
+            
+            self.logger.info("File manager theme refreshed")
+            
+        except Exception as e:
+            self.logger.error(f"Error refreshing file manager theme: {e}")
+
     def cleanup(self):
         """Clean up resources."""
         try:

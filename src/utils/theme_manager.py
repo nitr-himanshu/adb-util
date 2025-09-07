@@ -122,11 +122,69 @@ class ThemeManager(QObject):
                     color: #ffffff;
                 }
                 
+                QTreeView {
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    border-radius: 4px;
+                    alternate-background-color: #f8f9fa;
+                    selection-background-color: #007acc;
+                    selection-color: #ffffff;
+                }
+                
+                QTreeView::item {
+                    padding: 4px;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+                
+                QTreeView::item:selected {
+                    background-color: #007acc;
+                    color: #ffffff;
+                }
+                
+                QTreeView::item:hover {
+                    background-color: #f0f0f0;
+                }
+                
+                QTreeView::branch {
+                    background-color: #ffffff;
+                }
+                
+                QTreeView::branch:has-children:!has-siblings:closed,
+                QTreeView::branch:closed:has-children:has-siblings {
+                    border-image: none;
+                    image: none;
+                }
+                
+                QTreeView::branch:open:has-children:!has-siblings,
+                QTreeView::branch:open:has-children:has-siblings {
+                    border-image: none;
+                    image: none;
+                }
+                
+                QHeaderView::section {
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    padding: 6px;
+                    font-weight: bold;
+                }
+                
+                QHeaderView::section:hover {
+                    background-color: #e0e0e0;
+                }
+                
                 QTextEdit {
                     background-color: #ffffff;
                     color: #000000;
                     border: 1px solid #c0c0c0;
                     border-radius: 4px;
+                    selection-background-color: #007acc;
+                    selection-color: #ffffff;
+                }
+                
+                QTextEdit:focus {
+                    border-color: #007acc;
                 }
                 
                 QLineEdit {
@@ -314,11 +372,69 @@ class ThemeManager(QObject):
                     color: #ffffff;
                 }
                 
+                QTreeView {
+                    background-color: #2b2b2b;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    border-radius: 4px;
+                    alternate-background-color: #363636;
+                    selection-background-color: #007acc;
+                    selection-color: #ffffff;
+                }
+                
+                QTreeView::item {
+                    padding: 4px;
+                    border-bottom: 1px solid #404040;
+                }
+                
+                QTreeView::item:selected {
+                    background-color: #007acc;
+                    color: #ffffff;
+                }
+                
+                QTreeView::item:hover {
+                    background-color: #484848;
+                }
+                
+                QTreeView::branch {
+                    background-color: #2b2b2b;
+                }
+                
+                QTreeView::branch:has-children:!has-siblings:closed,
+                QTreeView::branch:closed:has-children:has-siblings {
+                    border-image: none;
+                    image: none;
+                }
+                
+                QTreeView::branch:open:has-children:!has-siblings,
+                QTreeView::branch:open:has-children:has-siblings {
+                    border-image: none;
+                    image: none;
+                }
+                
+                QHeaderView::section {
+                    background-color: #363636;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    padding: 6px;
+                    font-weight: bold;
+                }
+                
+                QHeaderView::section:hover {
+                    background-color: #484848;
+                }
+                
                 QTextEdit {
                     background-color: #1e1e1e;
                     color: #ffffff;
                     border: 1px solid #555555;
                     border-radius: 4px;
+                    selection-background-color: #007acc;
+                    selection-color: #ffffff;
+                }
+                
+                QTextEdit:focus {
+                    border-color: #007acc;
                 }
                 
                 QLineEdit {

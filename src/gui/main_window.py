@@ -234,18 +234,21 @@ class MainWindow(QMainWindow):
         # Add stretch to push right-side widgets to the right
         status_bar.addWidget(QLabel(), 1)  # Stretch widget
         
-        # Theme toggle buttons
-        self.light_theme_btn = QPushButton("☀️")
-        self.light_theme_btn.setToolTip("Switch to Light Mode (Ctrl+L)")
-        self.light_theme_btn.setMaximumSize(30, 25)
-        self.light_theme_btn.clicked.connect(lambda: self.set_theme("light"))
-        status_bar.addPermanentWidget(self.light_theme_btn)
+        # Theme toggle button
+        current_theme = theme_manager.get_current_theme()
+        theme_icon = "🌙" if current_theme == "dark" else "☀️"
+        theme_text = "Dark Mode" if current_theme == "light" else "Light Mode"
         
-        self.dark_theme_btn = QPushButton("🌙")
-        self.dark_theme_btn.setToolTip("Switch to Dark Mode (Ctrl+D)")
-        self.dark_theme_btn.setMaximumSize(30, 25)
-        self.dark_theme_btn.clicked.connect(lambda: self.set_theme("dark"))
-        status_bar.addPermanentWidget(self.dark_theme_btn)
+        self.theme_toggle_btn = QPushButton(f"{theme_icon} {theme_text}")
+        self.theme_toggle_btn.setToolTip(f"Switch to {theme_text.lower()} (Ctrl+T)")
+        self.theme_toggle_btn.setMaximumSize(120, 25)
+        self.theme_toggle_btn.setFont(QFont("Arial", 8))
+        self.theme_toggle_btn.clicked.connect(self.toggle_theme)
+        
+        # Style the button based on current theme
+        self.update_theme_button_style()
+        
+        status_bar.addPermanentWidget(self.theme_toggle_btn)
         
         # Device count
         self.device_count_label = QLabel("Devices: 0")
@@ -503,22 +506,81 @@ class MainWindow(QMainWindow):
         try:
             theme_manager.toggle_theme()
             theme_manager.save_theme_preference()
-            self.logger.info(f"Theme toggled to {theme_manager.get_current_theme()}")
+            
+            # Update button text and style
+            current_theme = theme_manager.get_current_theme()
+            theme_icon = "🌙" if current_theme == "dark" else "☀️"
+            theme_text = "Dark Mode" if current_theme == "light" else "Light Mode"
+            
+            self.theme_toggle_btn.setText(f"{theme_icon} {theme_text}")
+            self.theme_toggle_btn.setToolTip(f"Switch to {theme_text.lower()} (Ctrl+T)")
+            
+            # Update button style
+            self.update_theme_button_style()
+            
+            self.logger.info(f"Theme toggled to {current_theme}")
             
         except Exception as e:
             self.logger.error(f"Failed to toggle theme: {e}")
     
+    def update_theme_button_style(self):
+        """Update the theme toggle button style based on current theme."""
+        try:
+            current_theme = theme_manager.get_current_theme()
+            
+            if current_theme == "dark":
+                self.theme_toggle_btn.setStyleSheet("""
+                    QPushButton {
+                        color: #FFD700; 
+                        border: 1px solid #555; 
+                        border-radius: 3px; 
+                        padding: 4px 8px;
+                        background-color: #2d2d2d;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #3d3d3d;
+                        border-color: #777;
+                    }
+                """)
+            else:
+                self.theme_toggle_btn.setStyleSheet("""
+                    QPushButton {
+                        color: #4169E1; 
+                        border: 1px solid #ccc; 
+                        border-radius: 3px; 
+                        padding: 4px 8px;
+                        background-color: #f5f5f5;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #e5e5e5;
+                        border-color: #999;
+                    }
+                """)
+                
+        except Exception as e:
+            self.logger.error(f"Error updating theme button style: {e}")
+    
     def on_theme_changed(self, theme_name: str):
         """Handle theme change event."""
         try:
-            # Update button states to show current theme
-            if hasattr(self, 'light_theme_btn') and hasattr(self, 'dark_theme_btn'):
-                if theme_name == "light":
-                    self.light_theme_btn.setStyleSheet("background-color: #007acc; color: white;")
-                    self.dark_theme_btn.setStyleSheet("")
-                else:
-                    self.dark_theme_btn.setStyleSheet("background-color: #007acc; color: white;")
-                    self.light_theme_btn.setStyleSheet("")
+            # Update theme toggle button
+            if hasattr(self, 'theme_toggle_btn'):
+                theme_icon = "🌙" if theme_name == "dark" else "☀️"
+                theme_text = "Dark Mode" if theme_name == "light" else "Light Mode"
+                
+                self.theme_toggle_btn.setText(f"{theme_icon} {theme_text}")
+                self.theme_toggle_btn.setToolTip(f"Switch to {theme_text.lower()} (Ctrl+T)")
+                
+                # Update button style
+                self.update_theme_button_style()
+            
+            # Refresh theme for all open file manager tabs
+            for i in range(self.tab_widget.count()):
+                widget = self.tab_widget.widget(i)
+                if hasattr(widget, 'refresh_theme'):
+                    widget.refresh_theme()
             
             # Update status bar message
             if hasattr(self, 'status_label'):

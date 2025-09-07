@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QFileDialog, QProgressBar, QApplication
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread
-from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat
+from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QPalette
 
 from adb.logcat_handler import LogcatHandler, LogEntry
 from utils.logger import get_logger
@@ -126,6 +126,12 @@ class Logging(QWidget):
         self.init_ui()
         self.setup_timer()
         self.setup_logcat_callbacks()
+        # Apply current theme after UI initialization
+        QApplication.processEvents()  # Process any pending events first
+        
+        # Add a small delay to ensure UI is fully rendered
+        QTimer.singleShot(100, self.refresh_theme)  # Refresh theme after 100ms
+        
         self.logger.info("Logcat viewer initialization complete")
     
     def setup_logcat_callbacks(self):
@@ -240,13 +246,12 @@ class Logging(QWidget):
         self.log_display = QTextEdit()
         self.log_display.setFont(QFont("Consolas", 9))
         self.log_display.setReadOnly(True)
-        self.log_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #1e1e1e;
-                color: #ffffff;
-                border: 1px solid #333333;
-            }
-        """)
+        
+        # Set up QTextEdit to be more responsive to theme changes
+        self.log_display.setAutoFillBackground(True)
+        self.log_display.setBackgroundRole(QPalette.ColorRole.Base)
+        
+        # Remove hardcoded styling - let theme manager handle it
         layout.addWidget(self.log_display)
         
         # Auto-scroll checkbox
@@ -303,7 +308,7 @@ class Logging(QWidget):
             checkbox = QCheckBox(f"{level_name} ({level_code})")
             checkbox.setChecked(True)
             checkbox.stateChanged.connect(self.apply_filters)
-            checkbox.setStyleSheet(f"QCheckBox {{ color: {color}; }}")
+            # Remove hardcoded color styling - let theme manager handle it
             self.level_checkboxes[level_code] = checkbox
             level_layout.addWidget(checkbox)
         
@@ -377,7 +382,7 @@ class Logging(QWidget):
         
         # Add label to show current keywords
         self.keywords_label = QLabel("Keywords: None")
-        self.keywords_label.setStyleSheet("font-size: 10px; color: #888888;")
+        # Remove hardcoded styling - let theme manager handle it
         self.keywords_label.setWordWrap(True)
         highlight_layout.addWidget(self.keywords_label)
         
@@ -895,6 +900,116 @@ class Logging(QWidget):
         """Handle widget close event."""
         self.cleanup()
         super().closeEvent(event)
+        
+    def refresh_theme(self):
+        """Refresh theme-related styling for logging components."""
+        try:
+            # Get current theme from the application's stylesheet
+            app = QApplication.instance()
+            if not app:
+                return
+                
+            # Check if dark theme is active by looking for dark background colors in stylesheet
+            stylesheet = app.styleSheet()
+            is_dark_theme = "#1e1e1e" in stylesheet or "#2b2b2b" in stylesheet
+            
+            # Define theme colors
+            if is_dark_theme:
+                bg_color = "#1e1e1e"
+                text_color = "#ffffff"
+                border_color = "#555555"
+                selection_bg = "#007acc"
+                selection_text = "#ffffff"
+                theme_name = "dark"
+            else:  # light theme
+                bg_color = "#ffffff"
+                text_color = "#000000"
+                border_color = "#c0c0c0"
+                selection_bg = "#007acc"
+                selection_text = "#ffffff"
+                theme_name = "light"
+            
+            # Apply explicit styling to log display using both stylesheet and palette
+            if hasattr(self, 'log_display') and self.log_display:
+                # Method 1: Apply explicit stylesheet with !important
+                textedit_style = f"""
+                QTextEdit {{
+                    background-color: {bg_color} !important;
+                    color: {text_color} !important;
+                    border: 1px solid {border_color} !important;
+                    border-radius: 4px;
+                    selection-background-color: {selection_bg};
+                    selection-color: {selection_text};
+                }}
+                QTextEdit:focus {{
+                    border-color: {selection_bg} !important;
+                }}
+                """
+                self.log_display.setStyleSheet(textedit_style)
+                
+                # Method 2: Also set palette colors as backup
+                from PyQt6.QtGui import QPalette
+                palette = self.log_display.palette()
+                palette.setColor(QPalette.ColorRole.Base, QColor(bg_color))
+                palette.setColor(QPalette.ColorRole.Text, QColor(text_color))
+                palette.setColor(QPalette.ColorRole.Window, QColor(bg_color))
+                palette.setColor(QPalette.ColorRole.WindowText, QColor(text_color))
+                # Set all color groups to ensure consistency
+                for group in [QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive, QPalette.ColorGroup.Disabled]:
+                    palette.setColor(group, QPalette.ColorRole.Base, QColor(bg_color))
+                    palette.setColor(group, QPalette.ColorRole.Text, QColor(text_color))
+                    palette.setColor(group, QPalette.ColorRole.Window, QColor(bg_color))
+                    palette.setColor(group, QPalette.ColorRole.WindowText, QColor(text_color))
+                self.log_display.setPalette(palette)
+                
+                # Set auto fill background
+                self.log_display.setAutoFillBackground(True)
+                self.log_display.setBackgroundRole(QPalette.ColorRole.Base)
+                
+                # Method 3: Force immediate update
+                self.log_display.style().unpolish(self.log_display)
+                self.log_display.style().polish(self.log_display)
+                self.log_display.update()
+                self.log_display.repaint()
+                
+                # Method 4: Force refresh of viewport (for QTextEdit)
+                if hasattr(self.log_display, 'viewport'):
+                    viewport = self.log_display.viewport()
+                    if viewport:
+                        viewport_palette = viewport.palette()
+                        viewport_palette.setColor(QPalette.ColorRole.Base, QColor(bg_color))
+                        viewport_palette.setColor(QPalette.ColorRole.Text, QColor(text_color))
+                        viewport.setPalette(viewport_palette)
+                        viewport.update()
+                        viewport.repaint()
+                
+                self.logger.info(f"Applied {theme_name} theme: bg={bg_color}, text={text_color}")
+            
+            # Clear hardcoded styles from other components and let global theme handle them
+            if hasattr(self, 'level_checkboxes'):
+                for checkbox in self.level_checkboxes.values():
+                    checkbox.setStyleSheet("")  # Clear inline styles to use theme
+                    checkbox.style().unpolish(checkbox)
+                    checkbox.style().polish(checkbox)
+                    checkbox.update()
+            
+            if hasattr(self, 'keywords_label'):
+                self.keywords_label.setStyleSheet("")  # Clear inline styles to use theme
+                self.keywords_label.style().unpolish(self.keywords_label)
+                self.keywords_label.style().polish(self.keywords_label)
+                self.keywords_label.update()
+            
+            # Force refresh on other child widgets
+            for child in self.findChildren(QWidget):
+                if child != self.log_display:  # Skip log_display as we handled it explicitly
+                    child.style().unpolish(child)
+                    child.style().polish(child)
+                    child.update()
+            
+            self.logger.info(f"Logging theme refreshed to {theme_name} mode")
+            
+        except Exception as e:
+            self.logger.error(f"Error refreshing logging theme: {e}")
     
     def cleanup(self):
         """Clean up resources."""
