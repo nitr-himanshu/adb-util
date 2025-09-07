@@ -50,6 +50,10 @@ class LogcatWorker(QThread):
     def run(self):
         """Run logcat streaming."""
         try:
+            # Emit that we're starting immediately
+            self.stream_status_changed.emit(True)
+            self.logger.info(f"LogcatWorker thread started for device: {self.device_id}")
+            
             # Create a new event loop for this thread
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -60,11 +64,11 @@ class LogcatWorker(QThread):
         except Exception as e:
             self.logger.error(f"Logcat worker error: {e}")
             self.error_occurred.emit(str(e))
+            self.stream_status_changed.emit(False)
     
     async def _stream_logcat(self):
         """Stream logcat asynchronously."""
         try:
-            self.stream_status_changed.emit(True)
             self.logger.info(f"Starting logcat stream for device: {self.device_id}")
             
             async for log_entry in self.logcat_handler.start_logcat_stream(
@@ -130,10 +134,11 @@ class Logging(QWidget):
         # Apply current theme after UI initialization with proper timing
         QApplication.processEvents()  # Process any pending events first
         
-        # Schedule theme refresh with multiple intervals to ensure it's applied
-        QTimer.singleShot(50, self.refresh_theme)   # First attempt
-        QTimer.singleShot(150, self.refresh_theme)  # Second attempt
-        QTimer.singleShot(300, self.refresh_theme)  # Final attempt
+        # Apply theme immediately but efficiently
+        self.refresh_theme()
+        
+        # Schedule only one delayed theme refresh to ensure full application
+        QTimer.singleShot(100, self.refresh_theme_optimized)
         
         self.logger.info("Logcat viewer initialization complete")
     
@@ -235,6 +240,7 @@ class Logging(QWidget):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search logs...")
         self.search_input.textChanged.connect(self.search_logs)
+        self.search_input.setEnabled(True)  # Ensure it's enabled immediately
         search_layout.addWidget(self.search_input)
         
         self.search_case_sensitive = QCheckBox("Case sensitive")
@@ -375,6 +381,7 @@ class Logging(QWidget):
         self.highlight_input = QLineEdit()
         self.highlight_input.setPlaceholderText("Keywords to highlight...")
         self.highlight_input.returnPressed.connect(self.add_highlight_keyword)  # Add Enter key support
+        self.highlight_input.setEnabled(True)  # Ensure it's enabled immediately
         highlight_input_layout.addWidget(self.highlight_input)
         
         add_highlight_btn = QPushButton("Add")
@@ -441,26 +448,40 @@ class Logging(QWidget):
     def start_capture(self):
         """Start capturing logs."""
         try:
-            # Provide immediate feedback
+            # Provide immediate feedback and enable UI elements
             self.is_capturing = True
             self.start_btn.setText("⏸️ Pause")
             self.stop_btn.setEnabled(True)
             self.status_label.setText("Status: Starting...")
             
-            # Process UI events to show immediate feedback
+            # Ensure search and highlight functionality is immediately available
+            self.search_input.setEnabled(True)
+            self.highlight_input.setEnabled(True)
+            
+            # Process UI events IMMEDIATELY to show feedback
             QApplication.processEvents()
             
             # Get selected parameters
             buffer = self.buffer_combo.currentText()
             format_type = self.format_combo.currentText()
             
-            # Create and start worker thread
-            self.logcat_worker = LogcatWorker(self.device_id)
-            self.logcat_worker.set_parameters(buffer, format_type)
-            self.logcat_worker.log_entry_received.connect(self.on_log_entry_received)
-            self.logcat_worker.stream_status_changed.connect(self.on_stream_status_changed)
-            self.logcat_worker.error_occurred.connect(self.on_logcat_error)
-            self.logcat_worker.start()
+            # Create and start worker immediately for instant response
+            try:
+                self.logcat_worker = LogcatWorker(self.device_id)
+                self.logcat_worker.set_parameters(buffer, format_type)
+                self.logcat_worker.log_entry_received.connect(self.on_log_entry_received)
+                self.logcat_worker.stream_status_changed.connect(self.on_stream_status_changed)
+                self.logcat_worker.error_occurred.connect(self.on_logcat_error)
+                
+                # Start worker immediately
+                self.logcat_worker.start()
+                
+                # Update status immediately
+                self.status_label.setText("Status: Capturing...")
+                
+            except Exception as e:
+                self.logger.error(f"Failed to create logcat worker: {e}")
+                self.on_logcat_error(str(e))
             
             self.logger.info(f"Started logcat capture for device: {self.device_id}")
             
@@ -795,25 +816,97 @@ class Logging(QWidget):
     
     def search_logs(self):
         """Search and filter logs based on search criteria."""
-        self.apply_filters()
+        # Add immediate feedback
+        search_text = self.search_input.text()
+        if search_text:
+            self.status_label.setText(f"Status: Searching for '{search_text}'...")
+        else:
+            self.status_label.setText("Status: Capturing..." if self.is_capturing else "Status: Ready")
+        
+        # Process UI events for immediate feedback
+        QApplication.processEvents()
+        
+        # Apply filters efficiently
+        self.apply_filters_optimized()
+    
+    def apply_filters_optimized(self):
+        """Apply all active filters efficiently."""
+        # Clear filtered entries
+        self.filtered_entries.clear()
+        
+        # For large datasets, apply filters more efficiently
+        if len(self.log_entries) > 500:
+            # Process in batches to maintain UI responsiveness
+            batch_size = 100
+            processed = 0
+            
+            for i in range(0, len(self.log_entries), batch_size):
+                batch = self.log_entries[i:i + batch_size]
+                
+                for entry in batch:
+                    if self.passes_filters(entry):
+                        self.filtered_entries.append(entry)
+                
+                processed += len(batch)
+                
+                # Process UI events every batch to maintain responsiveness
+                if processed % (batch_size * 2) == 0:  # Every 200 entries
+                    QApplication.processEvents()
+        else:
+            # For smaller datasets, process normally
+            for entry in self.log_entries:
+                if self.passes_filters(entry):
+                    self.filtered_entries.append(entry)
+        
+        # Update display efficiently
+        self.refresh_display()
+        self.entry_count_label.setText(f"Entries: {len(self.log_entries)} (Filtered: {len(self.filtered_entries)})")
+        
+        # Update status
+        if self.search_input.text():
+            self.status_label.setText(f"Status: Found {len(self.filtered_entries)} matches")
+        else:
+            self.status_label.setText("Status: Capturing..." if self.is_capturing else "Status: Ready")
     
     def apply_filters(self):
         """Apply all active filters and refresh display."""
-        self.filtered_entries.clear()
-        
-        for entry in self.log_entries:
-            if self.passes_filters(entry):
-                self.filtered_entries.append(entry)
-        
-        self.refresh_display()
-        self.entry_count_label.setText(f"Entries: {len(self.log_entries)} (Filtered: {len(self.filtered_entries)})")
+        self.apply_filters_optimized()
     
     def refresh_display(self):
         """Refresh the log display with filtered entries."""
-        self.log_display.clear()
+        # Use a more efficient approach for large numbers of entries
+        if len(self.filtered_entries) > 100:
+            # For large datasets, only show recent entries to maintain responsiveness
+            recent_entries = self.filtered_entries[-100:]
+            self.log_display.clear()
+            self.log_display.append("... (showing last 100 entries for performance) ...\n")
+        else:
+            recent_entries = self.filtered_entries
+            self.log_display.clear()
         
-        for entry in self.filtered_entries:
-            self.display_log_entry(entry)
+        # Batch the text insertion for better performance
+        text_to_insert = []
+        for entry in recent_entries:
+            # Format log line based on entry content
+            if entry.tag == "raw" or (not entry.timestamp and not entry.pid):
+                log_line = entry.message
+            else:
+                timestamp_part = f"{entry.timestamp} " if entry.timestamp else ""
+                pid_part = f"({entry.pid})" if entry.pid else ""
+                log_line = f"{timestamp_part}{entry.level}/{entry.tag}{pid_part}: {entry.message}"
+            
+            text_to_insert.append(log_line)
+        
+        # Insert all text at once for better performance
+        if text_to_insert:
+            combined_text = "\n".join(text_to_insert)
+            self.log_display.append(combined_text)
+        
+        # Auto-scroll if enabled
+        if self.auto_scroll_checkbox.isChecked():
+            cursor = self.log_display.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.log_display.setTextCursor(cursor)
     
     def add_tag_filter(self):
         """Add a new tag filter."""
@@ -848,11 +941,20 @@ class Logging(QWidget):
             self.highlight_input.clear()
             self.logger.info(f"Highlight keyword added: {keyword}")
             
-            # Update keyword display if it exists
+            # Update keyword display immediately
             self._update_keyword_display()
             
-            # Refresh display to apply highlighting
-            self.refresh_display()
+            # Process UI events for immediate feedback
+            QApplication.processEvents()
+            
+            # Refresh display efficiently - only if we have entries to refresh
+            if self.filtered_entries and len(self.filtered_entries) < 50:
+                # For small datasets, do a full refresh
+                self.refresh_display()
+            else:
+                # For large datasets, just update the display incrementally
+                self.logger.info(f"Keyword '{keyword}' will be highlighted in new log entries")
+            
             return True  # Indicates success
     
     def _update_keyword_display(self):
@@ -1345,6 +1447,67 @@ class Logging(QWidget):
             
         except Exception as e:
             self.logger.error(f"Error refreshing logging theme: {e}")
+    
+    def refresh_theme_optimized(self):
+        """Optimized theme refresh that doesn't block UI."""
+        try:
+            # Only refresh if the widget is still visible and active
+            if not self.isVisible():
+                return
+            
+            # Use a more efficient approach - only refresh key components
+            app = QApplication.instance()
+            if not app:
+                return
+                
+            stylesheet = app.styleSheet()
+            is_dark_theme = "#1e1e1e" in stylesheet or "#2b2b2b" in stylesheet
+            
+            if is_dark_theme:
+                bg_color = "#1e1e1e"
+                text_color = "#ffffff"
+            else:
+                bg_color = "#ffffff"
+                text_color = "#000000"
+            
+            # Only update the most critical components for immediate responsiveness
+            if hasattr(self, 'log_display') and self.log_display:
+                self.log_display.setStyleSheet(f"""
+                QTextEdit {{
+                    background-color: {bg_color} !important;
+                    color: {text_color} !important;
+                    border: 1px solid #555555;
+                    border-radius: 4px;
+                }}
+                """)
+            
+            # Update search and highlight inputs for immediate functionality
+            if hasattr(self, 'search_input') and self.search_input:
+                self.search_input.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {bg_color} !important;
+                    color: {text_color} !important;
+                    border: 1px solid #555555;
+                    padding: 6px;
+                    border-radius: 4px;
+                }}
+                """)
+            
+            if hasattr(self, 'highlight_input') and self.highlight_input:
+                self.highlight_input.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {bg_color} !important;
+                    color: {text_color} !important;
+                    border: 1px solid #555555;
+                    padding: 6px;
+                    border-radius: 4px;
+                }}
+                """)
+            
+            self.logger.info("Optimized theme refresh completed")
+            
+        except Exception as e:
+            self.logger.error(f"Error in optimized theme refresh: {e}")
     
     def cleanup(self):
         """Clean up resources."""
