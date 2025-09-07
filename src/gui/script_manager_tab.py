@@ -29,141 +29,6 @@ from utils.logger import get_logger
 from utils.theme_manager import theme_manager
 
 
-class ScriptAddDialog(QDialog):
-    """Dialog for adding new scripts."""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.script_manager = get_script_manager()
-        self.logger = get_logger(__name__)
-        
-        self.setWindowTitle("Add New Script")
-        self.setModal(True)
-        self.resize(500, 400)
-        
-        self.setup_ui()
-        self.apply_theme()
-    
-    def setup_ui(self):
-        """Setup the dialog UI."""
-        layout = QVBoxLayout(self)
-        
-        # Form layout
-        form_layout = QFormLayout()
-        
-        # Script name
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("Enter script name")
-        form_layout.addRow("Name:", self.name_edit)
-        
-        # Script type
-        self.type_combo = QComboBox()
-        self.type_combo.addItem("Host Script (Windows .bat)", ScriptType.HOST_WINDOWS)
-        self.type_combo.addItem("Host Script (Linux .sh)", ScriptType.HOST_LINUX)
-        self.type_combo.addItem("Device Script (.sh)", ScriptType.DEVICE)
-        
-        # Set default based on OS
-        if os.name == 'nt':
-            self.type_combo.setCurrentIndex(0)  # Windows
-        else:
-            self.type_combo.setCurrentIndex(1)  # Linux
-            
-        form_layout.addRow("Type:", self.type_combo)
-        
-        # Script path
-        path_layout = QHBoxLayout()
-        self.path_edit = QLineEdit()
-        self.path_edit.setPlaceholderText("Select script file")
-        self.browse_button = QPushButton("Browse...")
-        self.browse_button.clicked.connect(self.browse_script)
-        
-        path_layout.addWidget(self.path_edit)
-        path_layout.addWidget(self.browse_button)
-        
-        form_widget = QWidget()
-        form_widget.setLayout(path_layout)
-        form_layout.addRow("Script File:", form_widget)
-        
-        # Description
-        self.description_edit = QTextEdit()
-        self.description_edit.setPlaceholderText("Optional description")
-        self.description_edit.setMaximumHeight(100)
-        form_layout.addRow("Description:", self.description_edit)
-        
-        layout.addLayout(form_layout)
-        
-        # Button box
-        button_box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | 
-            QDialogButtonBox.StandardButton.Cancel
-        )
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        
-        layout.addWidget(button_box)
-        
-        # Connect type change to update file dialog
-        self.type_combo.currentIndexChanged.connect(self.on_type_changed)
-    
-    def on_type_changed(self):
-        """Handle script type change."""
-        self.path_edit.clear()
-    
-    def browse_script(self):
-        """Browse for script file."""
-        script_type = self.type_combo.currentData()
-        
-        if script_type == ScriptType.HOST_WINDOWS:
-            file_filter = "Batch Files (*.bat);;All Files (*)"
-            title = "Select Windows Batch File"
-        else:  # HOST_LINUX or DEVICE
-            file_filter = "Shell Scripts (*.sh);;All Files (*)"
-            title = "Select Shell Script"
-        
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, title, str(Path.home()), file_filter
-        )
-        
-        if file_path:
-            self.path_edit.setText(file_path)
-            
-            # Auto-fill name if empty
-            if not self.name_edit.text():
-                name = Path(file_path).stem
-                self.name_edit.setText(name)
-    
-    def apply_theme(self):
-        """Apply current theme."""
-        if hasattr(theme_manager, 'apply_theme'):
-            theme_manager.apply_theme(self)
-    
-    def get_script_data(self) -> Optional[Dict]:
-        """Get script data from form."""
-        name = self.name_edit.text().strip()
-        script_path = self.path_edit.text().strip()
-        description = self.description_edit.toPlainText().strip()
-        script_type = self.type_combo.currentData()
-        
-        if not name:
-            QMessageBox.warning(self, "Error", "Please enter a script name.")
-            return None
-        
-        if not script_path:
-            QMessageBox.warning(self, "Error", "Please select a script file.")
-            return None
-        
-        if not Path(script_path).exists():
-            QMessageBox.warning(self, "Error", "Selected script file does not exist.")
-            return None
-        
-        return {
-            'name': name,
-            'script_type': script_type,
-            'script_path': script_path,
-            'description': description
-        }
-
-
 class ScriptOutputDialog(QDialog):
     """Dialog for displaying script execution output."""
     
@@ -428,17 +293,28 @@ class ScriptManagerTab(QWidget):
         # Header with actions
         header_layout = QHBoxLayout()
         
-        header_layout.addWidget(QLabel("Script Manager"))
+        title_label = QLabel("Script Manager")
+        title_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        header_layout.addWidget(title_label)
+        
         header_layout.addStretch()
         
         # Add script button
-        self.add_button = QPushButton("Add Script")
+        self.add_button = QPushButton("📝 New Script")
         self.add_button.clicked.connect(self.add_script)
+        self.add_button.setToolTip("Create a new script")
         header_layout.addWidget(self.add_button)
         
+        # Import script button
+        self.import_button = QPushButton("📁 Import")
+        self.import_button.clicked.connect(self.import_script)
+        self.import_button.setToolTip("Import script from file")
+        header_layout.addWidget(self.import_button)
+        
         # Refresh button
-        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button = QPushButton("🔄 Refresh")
         self.refresh_button.clicked.connect(self.load_scripts)
+        self.refresh_button.setToolTip("Refresh script list")
         header_layout.addWidget(self.refresh_button)
         
         layout.addLayout(header_layout)
@@ -697,15 +573,11 @@ class ScriptManagerTab(QWidget):
     
     def add_script(self):
         """Add new script."""
-        dialog = ScriptAddDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            data = dialog.get_script_data()
-            if data:
-                try:
-                    script_id = self.script_manager.add_script(**data)
-                    self.logger.info(f"Script added: {data['name']} ({script_id})")
-                except Exception as e:
-                    QMessageBox.critical(self, "Error", f"Failed to add script: {e}")
+        from gui.script_editor_dialog import ScriptEditorDialog
+        
+        dialog = ScriptEditorDialog(parent=self)
+        dialog.script_saved.connect(self.on_script_saved)
+        dialog.show()
     
     def edit_script(self):
         """Edit selected script."""
@@ -719,14 +591,79 @@ class ScriptManagerTab(QWidget):
         if not script:
             return
         
-        # Open script file in external editor
-        try:
-            if os.name == 'nt':  # Windows
-                os.startfile(script.script_path)
-            else:  # Linux/Mac
-                os.system(f"xdg-open '{script.script_path}'")
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Could not open script file: {e}")
+        from gui.script_editor_dialog import ScriptEditorDialog
+        
+        dialog = ScriptEditorDialog(script, parent=self)
+        dialog.script_saved.connect(self.on_script_saved)
+        dialog.show()
+    
+    def import_script(self):
+        """Import script from file."""
+        file_dialog = QFileDialog(self)
+        file_dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
+        file_dialog.setNameFilter("Script Files (*.bat *.sh);;Batch Files (*.bat);;Shell Scripts (*.sh);;All Files (*)")
+        
+        if file_dialog.exec() == QFileDialog.DialogCode.Accepted:
+            file_paths = file_dialog.selectedFiles()
+            if file_paths:
+                file_path = Path(file_paths[0])
+                
+                try:
+                    # Read file content
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Determine script type based on extension
+                    if file_path.suffix.lower() == '.bat':
+                        script_type = ScriptType.HOST_WINDOWS
+                    else:
+                        script_type = ScriptType.HOST_LINUX  # Default to Linux for .sh files
+                    
+                    # Copy file to scripts directory
+                    scripts_dir = Path.home() / ".adb-util" / "user_scripts"
+                    scripts_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    new_path = scripts_dir / file_path.name
+                    counter = 1
+                    while new_path.exists():
+                        stem = file_path.stem
+                        suffix = file_path.suffix
+                        new_path = scripts_dir / f"{stem}_{counter}{suffix}"
+                        counter += 1
+                    
+                    with open(new_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    
+                    # Make executable if shell script on Unix
+                    if script_type in [ScriptType.HOST_LINUX, ScriptType.DEVICE] and os.name != 'nt':
+                        os.chmod(new_path, 0o755)
+                    
+                    # Add to script manager
+                    script_name = file_path.stem
+                    script_id = self.script_manager.add_script(
+                        script_name, script_type, str(new_path), f"Imported from {file_path.name}"
+                    )
+                    
+                    QMessageBox.information(
+                        self, "Success", 
+                        f"Script '{script_name}' imported successfully."
+                    )
+                    
+                    self.logger.info(f"Script imported: {script_name} from {file_path}")
+                    
+                except Exception as e:
+                    QMessageBox.critical(self, "Import Error", f"Failed to import script:\n{e}")
+                    self.logger.error(f"Failed to import script: {e}")
+    
+    def on_script_saved(self, script_id: str):
+        """Handle script saved from editor."""
+        self.load_scripts()
+        # Select the saved script
+        for i in range(self.script_list.count()):
+            item = self.script_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == script_id:
+                self.script_list.setCurrentItem(item)
+                break
     
     def delete_script(self):
         """Delete selected script."""
@@ -820,26 +757,150 @@ class ScriptManagerTab(QWidget):
     def show_script_context_menu(self, position):
         """Show context menu for script list."""
         item = self.script_list.itemAt(position)
-        if not item:
-            return
         
         menu = QMenu(self)
         
-        execute_action = QAction("Execute", self)
-        execute_action.triggered.connect(self.execute_script)
-        menu.addAction(execute_action)
+        # Always show "New Script" action
+        new_action = QAction("📝 New Script", self)
+        new_action.triggered.connect(self.add_script)
+        menu.addAction(new_action)
         
-        edit_action = QAction("Edit", self)
-        edit_action.triggered.connect(self.edit_script)
-        menu.addAction(edit_action)
+        # Show import action
+        import_action = QAction("📁 Import Script", self)
+        import_action.triggered.connect(self.import_script)
+        menu.addAction(import_action)
         
-        menu.addSeparator()
-        
-        delete_action = QAction("Delete", self)
-        delete_action.triggered.connect(self.delete_script)
-        menu.addAction(delete_action)
+        if item:
+            menu.addSeparator()
+            
+            execute_action = QAction("▶️ Execute", self)
+            execute_action.triggered.connect(self.execute_script)
+            menu.addAction(execute_action)
+            
+            edit_action = QAction("✏️ Edit", self)
+            edit_action.triggered.connect(self.edit_script)
+            menu.addAction(edit_action)
+            
+            menu.addSeparator()
+            
+            duplicate_action = QAction("📋 Duplicate", self)
+            duplicate_action.triggered.connect(self.duplicate_script)
+            menu.addAction(duplicate_action)
+            
+            export_action = QAction("💾 Export", self)
+            export_action.triggered.connect(self.export_script)
+            menu.addAction(export_action)
+            
+            menu.addSeparator()
+            
+            delete_action = QAction("🗑️ Delete", self)
+            delete_action.triggered.connect(self.delete_script)
+            menu.addAction(delete_action)
         
         menu.exec(self.script_list.mapToGlobal(position))
+    
+    def duplicate_script(self):
+        """Duplicate selected script."""
+        current_item = self.script_list.currentItem()
+        if not current_item:
+            return
+        
+        script_id = current_item.data(Qt.ItemDataRole.UserRole)
+        script = self.script_manager.get_script(script_id)
+        
+        if not script:
+            return
+        
+        try:
+            # Read original script content
+            with open(script.script_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Create new script with "Copy" suffix
+            new_name = f"{script.name} - Copy"
+            scripts_dir = Path(script.script_path).parent
+            
+            # Determine file extension
+            if script.script_type == ScriptType.HOST_WINDOWS:
+                extension = ".bat"
+            else:
+                extension = ".sh"
+            
+            # Generate unique filename
+            safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            safe_name = safe_name.replace(' ', '_')
+            new_path = scripts_dir / f"{safe_name}{extension}"
+            
+            counter = 1
+            while new_path.exists():
+                new_path = scripts_dir / f"{safe_name}_{counter}{extension}"
+                counter += 1
+            
+            # Write content to new file
+            with open(new_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            # Make executable if shell script on Unix
+            if script.script_type in [ScriptType.HOST_LINUX, ScriptType.DEVICE] and os.name != 'nt':
+                os.chmod(new_path, 0o755)
+            
+            # Add to script manager
+            new_script_id = self.script_manager.add_script(
+                new_name, script.script_type, str(new_path), 
+                f"Copy of: {script.description}" if script.description else "Duplicated script"
+            )
+            
+            self.logger.info(f"Script duplicated: {script.name} -> {new_name}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Duplicate Error", f"Failed to duplicate script:\n{e}")
+            self.logger.error(f"Failed to duplicate script: {e}")
+    
+    def export_script(self):
+        """Export script to file."""
+        current_item = self.script_list.currentItem()
+        if not current_item:
+            return
+        
+        script_id = current_item.data(Qt.ItemDataRole.UserRole)
+        script = self.script_manager.get_script(script_id)
+        
+        if not script:
+            return
+        
+        # Determine file filter based on script type
+        if script.script_type == ScriptType.HOST_WINDOWS:
+            file_filter = "Batch Files (*.bat);;All Files (*)"
+            default_ext = ".bat"
+        else:
+            file_filter = "Shell Scripts (*.sh);;All Files (*)"
+            default_ext = ".sh"
+        
+        # Default filename
+        safe_name = "".join(c for c in script.name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_name = safe_name.replace(' ', '_')
+        default_name = f"{safe_name}{default_ext}"
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Script", str(Path.home() / default_name), file_filter
+        )
+        
+        if file_path:
+            try:
+                # Copy script file
+                import shutil
+                shutil.copy2(script.script_path, file_path)
+                
+                QMessageBox.information(
+                    self, "Success", 
+                    f"Script exported to:\n{file_path}"
+                )
+                
+                self.logger.info(f"Script exported: {script.name} to {file_path}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", f"Failed to export script:\n{e}")
+                self.logger.error(f"Failed to export script: {e}")
     
     def on_script_added(self, script_id: str):
         """Handle script added."""
