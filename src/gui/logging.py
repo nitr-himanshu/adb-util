@@ -111,7 +111,7 @@ class Logging(QWidget):
         self.log_entries: List[LogEntry] = []
         self.filtered_entries: List[LogEntry] = []
         self.tag_filters: Set[str] = set()
-        self.highlight_keywords: Set[str] = set()
+        self.highlight_keywords: List[str] = []
         
         # Logcat components
         self.logcat_handler = LogcatHandler(device_id)
@@ -813,7 +813,7 @@ class Logging(QWidget):
             self.tag_filter_input.clear()
             self.logger.info(f"Tag filter applied: {tag}")
     
-    def add_highlight_keyword(self):
+    def add_highlight_keyword(self, show_dialogs=True):
         """Add a keyword for highlighting."""
         keyword = self.highlight_input.text().strip()
         if keyword:
@@ -823,12 +823,13 @@ class Logging(QWidget):
             
             # Check for duplicates (case-insensitive)
             if any(k.lower() == keyword.lower() for k in self.highlight_keywords):
-                QMessageBox.information(
-                    self,
-                    "Duplicate Keyword",
-                    f"Keyword '{keyword}' is already in the highlight list."
-                )
-                return
+                if show_dialogs:
+                    QMessageBox.information(
+                        self,
+                        "Duplicate Keyword",
+                        f"Keyword '{keyword}' is already in the highlight list."
+                    )
+                return False  # Indicates duplicate was found
             
             # Add the keyword
             self.highlight_keywords.append(keyword)
@@ -840,6 +841,7 @@ class Logging(QWidget):
             
             # Refresh display to apply highlighting
             self.refresh_display()
+            return True  # Indicates success
     
     def _update_keyword_display(self):
         """Update the display of current highlight keywords."""
