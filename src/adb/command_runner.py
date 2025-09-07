@@ -6,10 +6,20 @@ ADB command execution and shell operations.
 
 import asyncio
 import subprocess
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List
+from dataclasses import dataclass
 
 from utils.logger import get_logger
 from utils.constants import COMMAND_TIMEOUT
+
+
+@dataclass
+class CommandResult:
+    """Result of a command execution."""
+    success: bool
+    stdout: str
+    stderr: str
+    return_code: int
 
 
 class CommandRunner:
@@ -118,3 +128,57 @@ class CommandRunner:
             properties[prop_name] = prop_value
         
         return properties
+
+
+class ADBCommandRunner:
+    """Synchronous ADB command runner for script execution."""
+    
+    def __init__(self, device_id: str):
+        self.device_id = device_id
+        self.logger = get_logger(__name__)
+        
+    def run_command(self, args: List[str], timeout: int = 30) -> CommandResult:
+        """Run ADB command synchronously."""
+        # Build full command
+        cmd = ["adb", "-s", self.device_id] + args
+        cmd_str = " ".join(cmd)
+        
+        self.logger.debug(f"Executing ADB command: {cmd_str}")
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+            
+            success = result.returncode == 0
+            stdout = result.stdout or ""
+            stderr = result.stderr or ""
+            
+            self.logger.debug(f"Command completed with return code: {result.returncode}")
+            
+            return CommandResult(
+                success=success,
+                stdout=stdout,
+                stderr=stderr,
+                return_code=result.returncode
+            )
+            
+        except subprocess.TimeoutExpired:
+            self.logger.error(f"Command timeout after {timeout}s: {cmd_str}")
+            return CommandResult(
+                success=False,
+                stdout="",
+                stderr=f"Command timeout after {timeout}s",
+                return_code=-1
+            )
+        except Exception as e:
+            self.logger.error(f"Command execution failed: {e}")
+            return CommandResult(
+                success=False,
+                stdout="",
+                stderr=str(e),
+                return_code=-1
+            )

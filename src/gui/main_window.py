@@ -159,6 +159,11 @@ class MainWindow(QMainWindow):
         logging_btn.clicked.connect(lambda: self.open_device_tab("logging"))
         actions_layout.addWidget(logging_btn, 1, 0)
         
+        # Script Manager button (doesn't require device selection)
+        script_manager_btn = QPushButton("🔧 Scripts")
+        script_manager_btn.clicked.connect(self.open_script_manager_tab)
+        actions_layout.addWidget(script_manager_btn, 1, 1)
+        
         layout.addLayout(actions_layout)
         
         # Refresh button
@@ -190,6 +195,13 @@ class MainWindow(QMainWindow):
         
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")
+        
+        script_manager_action = QAction("🔧 &Script Manager", self)
+        script_manager_action.setShortcut("Ctrl+M")
+        script_manager_action.triggered.connect(self.open_script_manager_tab)
+        tools_menu.addAction(script_manager_action)
+        
+        tools_menu.addSeparator()
         
         preferences_action = QAction("&Preferences", self)
         preferences_action.setShortcut("Ctrl+,")
@@ -453,6 +465,31 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Failed to create {mode} tab for device {device_id}: {e}", exc_info=True)
             QMessageBox.critical(self, "Error", f"Failed to create {mode} tab: {str(e)}")
+    
+    def open_script_manager_tab(self):
+        """Open script manager tab."""
+        self.logger.info("Opening script manager tab")
+        
+        try:
+            # Check if script manager tab is already open
+            for i in range(self.tab_widget.count()):
+                widget = self.tab_widget.widget(i)
+                if hasattr(widget, '__class__') and widget.__class__.__name__ == 'ScriptManagerTab':
+                    self.tab_widget.setCurrentIndex(i)
+                    self.logger.info("Script manager tab already open, switching to it")
+                    return
+            
+            # Import and create script manager tab
+            from gui.script_manager_tab import ScriptManagerTab
+            widget = ScriptManagerTab()
+            
+            self.tab_widget.addTab(widget, "🔧 Script Manager")
+            self.tab_widget.setCurrentWidget(widget)
+            self.logger.info("Successfully created script manager tab")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create script manager tab: {e}", exc_info=True)
+            QMessageBox.critical(self, "Error", f"Failed to create script manager tab: {str(e)}")
     
     def show_about(self):
         """Show about dialog."""
