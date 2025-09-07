@@ -26,6 +26,7 @@ from PyQt6.QtGui import (
 
 from src.adb.file_operations import FileOperations, FileInfo
 from src.utils.logger import get_logger
+from src.utils.theme_manager import ThemeManager
 
 
 class LineNumberArea(QWidget):
@@ -49,11 +50,13 @@ class CodeEditor(QPlainTextEdit):
         super().__init__(parent)
         
         self.line_number_area = LineNumberArea(self)
+        self.theme_manager = ThemeManager()
         
         # Connect signals
         self.blockCountChanged.connect(self.update_line_number_area_width)
         self.updateRequest.connect(self.update_line_number_area)
         self.cursorPositionChanged.connect(self.highlight_current_line)
+        self.theme_manager.theme_changed.connect(self.apply_theme)
         
         # Initial setup
         self.update_line_number_area_width(0)
@@ -67,6 +70,9 @@ class CodeEditor(QPlainTextEdit):
         
         # Enable line wrap
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        
+        # Apply initial theme
+        self.apply_theme(self.theme_manager.get_current_theme())
         
     def line_number_area_width(self):
         """Calculate the width needed for line numbers."""
@@ -108,7 +114,20 @@ class CodeEditor(QPlainTextEdit):
     def line_number_area_paint_event(self, event):
         """Paint the line numbers."""
         painter = QPainter(self.line_number_area)
-        painter.fillRect(event.rect(), QColor(240, 240, 240))
+        
+        # Get theme colors
+        theme_colors = self.theme_manager.get_theme_colors()
+        current_theme = self.theme_manager.get_current_theme()
+        
+        # Set colors based on theme
+        if current_theme == "dark":
+            bg_color = QColor("#363636")
+            text_color = QColor("#bbbbbb")
+        else:
+            bg_color = QColor("#f0f0f0")
+            text_color = QColor("#666666")
+            
+        painter.fillRect(event.rect(), bg_color)
         
         block = self.firstVisibleBlock()
         block_number = block.blockNumber()
@@ -118,10 +137,10 @@ class CodeEditor(QPlainTextEdit):
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
                 number = str(block_number + 1)
-                painter.setPen(QColor(120, 120, 120))
+                painter.setPen(text_color)
                 painter.drawText(
                     0, int(top), 
-                    self.line_number_area.width(), 
+                    self.line_number_area.width() - 5, 
                     self.fontMetrics().height(),
                     Qt.AlignmentFlag.AlignRight, number
                 )
@@ -138,7 +157,15 @@ class CodeEditor(QPlainTextEdit):
         if not self.isReadOnly():
             selection = QTextEdit.ExtraSelection()
             
-            line_color = QColor(Qt.GlobalColor.yellow).lighter(160)
+            # Get theme-appropriate colors
+            current_theme = self.theme_manager.get_current_theme()
+            if current_theme == "dark":
+                # Dark theme: subtle blue highlight
+                line_color = QColor("#2d4f67")  # Dark blue-gray
+            else:
+                # Light theme: subtle yellow highlight
+                line_color = QColor("#fffacd")  # Light yellow
+                
             selection.format.setBackground(line_color)
             selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
             selection.cursor = self.textCursor()
@@ -146,6 +173,53 @@ class CodeEditor(QPlainTextEdit):
             extra_selections.append(selection)
             
         self.setExtraSelections(extra_selections)
+        
+    def apply_theme(self, theme_name: str):
+        """Apply theme styling to the editor."""
+        theme_colors = self.theme_manager.get_theme_colors()
+        
+        if theme_name == "dark":
+            style = f"""
+                QPlainTextEdit {{
+                    background-color: #1e1e1e;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    border-radius: 4px;
+                    selection-background-color: #264f78;
+                    selection-color: #ffffff;
+                    font-family: 'Consolas', 'Courier New', monospace;
+                }}
+                
+                QPlainTextEdit:focus {{
+                    border-color: #007acc;
+                    border-width: 2px;
+                }}
+            """
+        else:
+            style = f"""
+                QPlainTextEdit {{
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    border-radius: 4px;
+                    selection-background-color: #316ac5;
+                    selection-color: #ffffff;
+                    font-family: 'Consolas', 'Courier New', monospace;
+                }}
+                
+                QPlainTextEdit:focus {{
+                    border-color: #007acc;
+                    border-width: 2px;
+                }}
+            """
+            
+        self.setStyleSheet(style)
+        
+        # Update line number area
+        self.line_number_area.update()
+        
+        # Re-highlight current line with new theme
+        self.highlight_current_line()
 
 
 class FileUploadWorker(QThread):
@@ -209,10 +283,18 @@ class IntegratedTextEditor(QDialog):
         self.original_content = ""
         self.upload_worker = None
         
+        # Theme manager
+        self.theme_manager = ThemeManager()
+        
         # Create editor first
         self.editor = CodeEditor()
         
         self.setup_ui()
+        self.apply_theme(self.theme_manager.get_current_theme())
+        
+        # Connect theme changes
+        self.theme_manager.theme_changed.connect(self.apply_theme)
+        
         self.load_file_content()
         
     def setup_ui(self):
@@ -560,6 +642,125 @@ class IntegratedTextEditor(QDialog):
             self.upload_worker.wait(1000)
             
         event.accept()
+        
+    def apply_theme(self, theme_name: str):
+        """Apply theme styling to the dialog."""
+        theme_colors = self.theme_manager.get_theme_colors()
+        
+        if theme_name == "dark":
+            style = f"""
+                QDialog {{
+                    background-color: #2b2b2b;
+                    color: #ffffff;
+                }}
+                
+                QMenuBar {{
+                    background-color: #363636;
+                    color: #ffffff;
+                    border-bottom: 1px solid #555555;
+                }}
+                
+                QMenuBar::item:selected {{
+                    background-color: #484848;
+                }}
+                
+                QMenu {{
+                    background-color: #363636;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                }}
+                
+                QMenu::item:selected {{
+                    background-color: #484848;
+                }}
+                
+                QLabel {{
+                    color: #ffffff;
+                }}
+                
+                QFrame {{
+                    border: 1px solid #555555;
+                    background-color: #363636;
+                }}
+                
+                QCheckBox {{
+                    color: #ffffff;
+                }}
+                
+                QPushButton {{
+                    background-color: #363636;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                }}
+                
+                QPushButton:hover {{
+                    background-color: #484848;
+                }}
+                
+                QPushButton:pressed {{
+                    background-color: #555555;
+                }}
+            """
+        else:
+            style = f"""
+                QDialog {{
+                    background-color: #ffffff;
+                    color: #000000;
+                }}
+                
+                QMenuBar {{
+                    background-color: #e0e0e0;
+                    color: #000000;
+                    border-bottom: 1px solid #c0c0c0;
+                }}
+                
+                QMenuBar::item:selected {{
+                    background-color: #d0d0d0;
+                }}
+                
+                QMenu {{
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                }}
+                
+                QMenu::item:selected {{
+                    background-color: #e0e0e0;
+                }}
+                
+                QLabel {{
+                    color: #000000;
+                }}
+                
+                QFrame {{
+                    border: 1px solid #c0c0c0;
+                    background-color: #f0f0f0;
+                }}
+                
+                QCheckBox {{
+                    color: #000000;
+                }}
+                
+                QPushButton {{
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                }}
+                
+                QPushButton:hover {{
+                    background-color: #e0e0e0;
+                }}
+                
+                QPushButton:pressed {{
+                    background-color: #d0d0d0;
+                }}
+            """
+            
+        self.setStyleSheet(style)
 
 
 class FileDownloadWorker(QThread):
