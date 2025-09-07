@@ -158,10 +158,6 @@ class MainWindow(QMainWindow):
         logging_btn.clicked.connect(lambda: self.open_device_tab("logging"))
         actions_layout.addWidget(logging_btn, 1, 0)
         
-        utils_btn = QPushButton("🛠️ Utils")
-        utils_btn.clicked.connect(lambda: self.open_device_tab("utils"))
-        actions_layout.addWidget(utils_btn, 1, 1)
-        
         layout.addLayout(actions_layout)
         
         # Refresh button
@@ -293,7 +289,6 @@ class MainWindow(QMainWindow):
            📁 File Manager - Transfer files between device and computer
            💻 Terminal - Execute ADB commands
            📊 Logging - View real-time logcat output
-           🛠️ Utils - Network info and port forwarding
         
         3. Click the mode button to open a new tab
         """)
@@ -444,9 +439,6 @@ class MainWindow(QMainWindow):
             elif mode == "logging":
                 from gui.logging import Logging
                 widget = Logging(device_id)
-            elif mode == "utils":
-                from gui.utils import Utils
-                widget = Utils(device_id)
             else:
                 self.logger.warning(f"Unknown mode requested: {mode}")
                 widget = QLabel(f"Mode '{mode}' not implemented yet")

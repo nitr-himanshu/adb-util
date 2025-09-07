@@ -53,8 +53,7 @@ MIN_WINDOW_HEIGHT = 600
 TAB_MODES = {
     'file_manager': 'File Manager',
     'terminal': 'Terminal', 
-    'logging': 'Logging',
-    'utils': 'Utils'
+    'logging': 'Logging'
 }
 
 # Log Levels
