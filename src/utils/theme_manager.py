@@ -94,6 +94,7 @@ class ThemeManager(QObject):
                     padding: 6px 12px;
                     border-radius: 4px;
                     font-weight: normal;
+                    min-height: 20px;
                 }
                 
                 QPushButton:hover {
@@ -103,6 +104,11 @@ class ThemeManager(QObject):
                 
                 QPushButton:pressed {
                     background-color: #d0d0d0;
+                }
+                
+                QPushButton:disabled {
+                    background-color: #f0f0f0;
+                    color: #888888;
                 }
                 
                 QListWidget {
@@ -410,6 +416,7 @@ class ThemeManager(QObject):
                     padding: 6px 12px;
                     border-radius: 4px;
                     font-weight: normal;
+                    min-height: 20px;
                 }
                 
                 QPushButton:hover {
@@ -419,6 +426,11 @@ class ThemeManager(QObject):
                 
                 QPushButton:pressed {
                     background-color: #555555;
+                }
+                
+                QPushButton:disabled {
+                    background-color: #555555;
+                    color: #888888;
                 }
                 
                 QListWidget {

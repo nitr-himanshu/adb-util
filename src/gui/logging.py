@@ -926,6 +926,9 @@ class Logging(QWidget):
                 widget_bg = "#2b2b2b"
                 input_bg = "#363636"
                 groupbox_bg = "#2b2b2b"
+                button_bg = "#363636"
+                button_hover_bg = "#484848"
+                button_pressed_bg = "#555555"
                 theme_name = "dark"
             else:  # light theme
                 bg_color = "#ffffff"
@@ -936,6 +939,9 @@ class Logging(QWidget):
                 widget_bg = "#f0f0f0"
                 input_bg = "#ffffff"
                 groupbox_bg = "#ffffff"
+                button_bg = "#ffffff"
+                button_hover_bg = "#e0e0e0"
+                button_pressed_bg = "#d0d0d0"
                 theme_name = "light"
             
             # Apply comprehensive styling to all logging components
@@ -995,6 +1001,51 @@ class Logging(QWidget):
                 
                 self.logger.info(f"Applied {theme_name} theme: bg={bg_color}, text={text_color}")
             
+            # Apply styling to ALL buttons
+            button_style = f"""
+            QPushButton {{
+                background-color: {button_bg} !important;
+                color: {text_color} !important;
+                border: 1px solid {border_color} !important;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: normal;
+                min-height: 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {button_hover_bg} !important;
+                border-color: {selection_bg} !important;
+            }}
+            QPushButton:pressed {{
+                background-color: {button_pressed_bg} !important;
+            }}
+            QPushButton:disabled {{
+                background-color: {border_color} !important;
+                color: #888888 !important;
+            }}
+            """
+            
+            # Apply to all specific buttons
+            button_attributes = [
+                'start_btn', 'stop_btn', 'clear_btn', 'save_btn'
+            ]
+            
+            for button_attr in button_attributes:
+                if hasattr(self, button_attr):
+                    button = getattr(self, button_attr)
+                    if button:
+                        button.setStyleSheet(button_style)
+                        button.style().unpolish(button)
+                        button.style().polish(button)
+                        button.update()
+            
+            # Apply to ALL QPushButton widgets found in the widget tree
+            for button in self.findChildren(QPushButton):
+                button.setStyleSheet(button_style)
+                button.style().unpolish(button)
+                button.style().polish(button)
+                button.update()
+            
             # Apply styling to search input
             if hasattr(self, 'search_input') and self.search_input:
                 search_style = f"""
@@ -1011,9 +1062,9 @@ class Logging(QWidget):
                 """
                 self.search_input.setStyleSheet(search_style)
                 
-            # Apply styling to tag filter input
-            if hasattr(self, 'tag_filter_input') and self.tag_filter_input:
-                self.tag_filter_input.setStyleSheet(f"""
+            # Apply styling to ALL QLineEdit widgets
+            for line_edit in self.findChildren(QLineEdit):
+                line_edit_style = f"""
                 QLineEdit {{
                     background-color: {input_bg} !important;
                     color: {text_color} !important;
@@ -1021,203 +1072,248 @@ class Logging(QWidget):
                     padding: 6px;
                     border-radius: 4px;
                 }}
-                """)
-            
-            # Apply styling to combo boxes
-            for combo_attr in ['format_combo', 'buffer_combo']:
-                if hasattr(self, combo_attr):
-                    combo = getattr(self, combo_attr)
-                    combo.setStyleSheet(f"""
-                    QComboBox {{
-                        background-color: {input_bg} !important;
-                        color: {text_color} !important;
-                        border: 1px solid {border_color} !important;
-                        padding: 6px;
-                        border-radius: 4px;
-                    }}
-                    QComboBox::drop-down {{
-                        border: none;
-                        background-color: {border_color};
-                        border-radius: 2px;
-                    }}
-                    QComboBox QAbstractItemView {{
-                        background-color: {input_bg};
-                        color: {text_color};
-                        border: 1px solid {border_color};
-                        border-radius: 4px;
-                    }}
-                    """)
-            
-            # Apply styling to spin boxes
-            if hasattr(self, 'buffer_size_spin') and self.buffer_size_spin:
-                self.buffer_size_spin.setStyleSheet(f"""
-                QSpinBox {{
-                    background-color: {input_bg} !important;
-                    color: {text_color} !important;
-                    border: 1px solid {border_color} !important;
-                    padding: 4px;
-                    border-radius: 4px;
+                QLineEdit:focus {{
+                    border-color: {selection_bg} !important;
                 }}
-                """)
-                
-            if hasattr(self, 'pid_filter_input') and self.pid_filter_input:
-                self.pid_filter_input.setStyleSheet(f"""
-                QSpinBox {{
-                    background-color: {input_bg} !important;
-                    color: {text_color} !important;
-                    border: 1px solid {border_color} !important;
-                    padding: 4px;
-                    border-radius: 4px;
-                }}
-                """)
-                
-            # Clear hardcoded styles from level checkboxes and apply theme-appropriate styling
-            if hasattr(self, 'level_checkboxes'):
-                for checkbox in self.level_checkboxes.values():
-                    checkbox.setStyleSheet(f"""
-                    QCheckBox {{
-                        color: {text_color} !important;
-                    }}
-                    QCheckBox::indicator {{
-                        width: 16px;
-                        height: 16px;
-                        background-color: {input_bg};
-                        border: 1px solid {border_color};
-                        border-radius: 2px;
-                    }}
-                    QCheckBox::indicator:checked {{
-                        background-color: {selection_bg};
-                        border-color: {selection_bg};
-                    }}
-                    """)
-                    checkbox.style().unpolish(checkbox)
-                    checkbox.style().polish(checkbox)
-                    checkbox.update()
+                """
+                line_edit.setStyleSheet(line_edit_style)
+                line_edit.style().unpolish(line_edit)
+                line_edit.style().polish(line_edit)
+                line_edit.update()
             
-            # Apply styling to other checkboxes
-            for checkbox_attr in ['search_case_sensitive', 'search_regex', 'auto_scroll_checkbox', 'pid_filter_enabled']:
-                if hasattr(self, checkbox_attr):
-                    checkbox = getattr(self, checkbox_attr)
-                    checkbox.setStyleSheet(f"""
-                    QCheckBox {{
-                        color: {text_color} !important;
-                    }}
-                    QCheckBox::indicator {{
-                        width: 16px;
-                        height: 16px;
-                        background-color: {input_bg};
-                        border: 1px solid {border_color};
-                        border-radius: 2px;
-                    }}
-                    QCheckBox::indicator:checked {{
-                        background-color: {selection_bg};
-                        border-color: {selection_bg};
-                    }}
-                    """)
+            # Apply styling to ALL QComboBox widgets
+            combo_style = f"""
+            QComboBox {{
+                background-color: {input_bg} !important;
+                color: {text_color} !important;
+                border: 1px solid {border_color} !important;
+                padding: 6px;
+                border-radius: 4px;
+                min-height: 20px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                background-color: {border_color};
+                border-radius: 2px;
+                width: 20px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 4px solid {text_color};
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {input_bg} !important;
+                color: {text_color} !important;
+                border: 1px solid {border_color} !important;
+                border-radius: 4px;
+                selection-background-color: {selection_bg};
+            }}
+            """
             
-            # Apply styling to group boxes
-            group_box_style = f"""
+            for combo in self.findChildren(QComboBox):
+                combo.setStyleSheet(combo_style)
+                combo.style().unpolish(combo)
+                combo.style().polish(combo)
+                combo.update()
+            
+            # Apply styling to ALL QSpinBox widgets
+            spinbox_style = f"""
+            QSpinBox {{
+                background-color: {input_bg} !important;
+                color: {text_color} !important;
+                border: 1px solid {border_color} !important;
+                padding: 4px;
+                border-radius: 4px;
+                min-height: 20px;
+            }}
+            QSpinBox:focus {{
+                border-color: {selection_bg} !important;
+            }}
+            QSpinBox::up-button, QSpinBox::down-button {{
+                background-color: {button_bg};
+                border: 1px solid {border_color};
+                width: 16px;
+            }}
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+                background-color: {button_hover_bg};
+            }}
+            """
+            
+            for spinbox in self.findChildren(QSpinBox):
+                spinbox.setStyleSheet(spinbox_style)
+                spinbox.style().unpolish(spinbox)
+                spinbox.style().polish(spinbox)
+                spinbox.update()
+                
+            # Apply styling to ALL QCheckBox widgets
+            checkbox_style = f"""
+            QCheckBox {{
+                color: {text_color} !important;
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+                background-color: {input_bg} !important;
+                border: 1px solid {border_color} !important;
+                border-radius: 2px;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {selection_bg} !important;
+                border-color: {selection_bg} !important;
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: {selection_bg} !important;
+            }}
+            """
+            
+            for checkbox in self.findChildren(QCheckBox):
+                checkbox.setStyleSheet(checkbox_style)
+                checkbox.style().unpolish(checkbox)
+                checkbox.style().polish(checkbox)
+                checkbox.update()
+            
+            # Apply styling to ALL QGroupBox widgets
+            groupbox_style = f"""
             QGroupBox {{
                 color: {text_color} !important;
                 border: 1px solid {border_color} !important;
                 border-radius: 4px;
                 margin: 8px 0px;
                 padding-top: 16px;
-                background-color: {groupbox_bg};
+                background-color: {groupbox_bg} !important;
+                font-weight: bold;
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 8px;
                 padding: 0px 8px;
-                background-color: {groupbox_bg};
-                color: {text_color};
+                background-color: {groupbox_bg} !important;
+                color: {text_color} !important;
+                font-weight: bold;
             }}
             """
             
-            # Apply to all group boxes in the widget
-            for groupbox in self.findChildren(QWidget):
-                if groupbox.__class__.__name__ == 'QGroupBox':
-                    groupbox.setStyleSheet(group_box_style)
-                    groupbox.style().unpolish(groupbox)
-                    groupbox.style().polish(groupbox)
-                    groupbox.update()
+            for groupbox in self.findChildren(QGroupBox):
+                groupbox.setStyleSheet(groupbox_style)
+                groupbox.style().unpolish(groupbox)
+                groupbox.style().polish(groupbox)
+                groupbox.update()
             
-            # Apply styling to scroll areas
+            # Apply styling to ALL QScrollArea widgets
             scroll_area_style = f"""
             QScrollArea {{
                 background-color: {widget_bg} !important;
-                border: 1px solid {border_color};
+                border: 1px solid {border_color} !important;
                 border-radius: 4px;
             }}
+            QScrollArea > QWidget > QWidget {{
+                background-color: {widget_bg} !important;
+            }}
             QScrollBar:vertical {{
-                background-color: {input_bg};
+                background-color: {input_bg} !important;
                 width: 12px;
                 border-radius: 6px;
+                border: none;
             }}
             QScrollBar::handle:vertical {{
-                background-color: {border_color};
+                background-color: {border_color} !important;
                 border-radius: 6px;
                 min-height: 20px;
             }}
             QScrollBar::handle:vertical:hover {{
-                background-color: {selection_bg};
+                background-color: {selection_bg} !important;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                background: none;
+                border: none;
+            }}
+            QScrollBar:horizontal {{
+                background-color: {input_bg} !important;
+                height: 12px;
+                border-radius: 6px;
+                border: none;
+            }}
+            QScrollBar::handle:horizontal {{
+                background-color: {border_color} !important;
+                border-radius: 6px;
+                min-width: 20px;
+            }}
+            QScrollBar::handle:horizontal:hover {{
+                background-color: {selection_bg} !important;
             }}
             """
             
-            for scroll_area in self.findChildren(QWidget):
-                if scroll_area.__class__.__name__ == 'QScrollArea':
-                    scroll_area.setStyleSheet(scroll_area_style)
-                    scroll_area.style().unpolish(scroll_area)
-                    scroll_area.style().polish(scroll_area)
-                    scroll_area.update()
+            for scroll_area in self.findChildren(QScrollArea):
+                scroll_area.setStyleSheet(scroll_area_style)
+                scroll_area.style().unpolish(scroll_area)
+                scroll_area.style().polish(scroll_area)
+                scroll_area.update()
                     
-            # Apply styling to labels
-            for label in self.findChildren(QWidget):
-                if label.__class__.__name__ == 'QLabel':
-                    label.setStyleSheet(f"""
-                    QLabel {{
-                        color: {text_color} !important;
-                        background-color: transparent;
-                    }}
-                    """)
-                    
-            # Apply styling to frames
-            for frame in self.findChildren(QWidget):
-                if frame.__class__.__name__ == 'QFrame':
-                    frame.setStyleSheet(f"""
-                    QFrame {{
-                        border: 1px solid {border_color};
-                        border-radius: 4px;
-                        background-color: {widget_bg};
-                    }}
-                    """)
-            
-            # Clear hardcoded styles from keywords label if it exists
-            if hasattr(self, 'keywords_label'):
-                self.keywords_label.setStyleSheet(f"""
+            # Apply styling to ALL QLabel widgets
+            for label in self.findChildren(QLabel):
+                label.setStyleSheet(f"""
                 QLabel {{
                     color: {text_color} !important;
                     background-color: transparent;
                 }}
                 """)
-                self.keywords_label.style().unpolish(self.keywords_label)
-                self.keywords_label.style().polish(self.keywords_label)
-                self.keywords_label.update()
+                label.style().unpolish(label)
+                label.style().polish(label)
+                label.update()
+                    
+            # Apply styling to ALL QFrame widgets
+            for frame in self.findChildren(QFrame):
+                frame.setStyleSheet(f"""
+                QFrame {{
+                    border: 1px solid {border_color} !important;
+                    border-radius: 4px;
+                    background-color: {widget_bg} !important;
+                }}
+                """)
+                frame.style().unpolish(frame)
+                frame.style().polish(frame)
+                frame.update()
             
-            # Force refresh on other child widgets
+            # Apply styling to ALL QWidget widgets (catch-all for any remaining elements)
+            widget_style = f"""
+            QWidget {{
+                background-color: {widget_bg};
+                color: {text_color};
+            }}
+            """
+            
+            # Apply to the main widget itself
+            self.setStyleSheet(f"""
+            QWidget#logging_main {{
+                background-color: {widget_bg} !important;
+                color: {text_color} !important;
+            }}
+            {widget_style}
+            """)
+            
+            # Force refresh on ALL child widgets
             for child in self.findChildren(QWidget):
-                if child != self.log_display:  # Skip log_display as we handled it explicitly
+                try:
                     child.style().unpolish(child)
                     child.style().polish(child)
                     child.update()
+                except:
+                    pass  # Ignore errors for widgets that might not support styling
             
-            # Force a full repaint of the entire widget
+            # Force a full repaint of the entire widget hierarchy
             self.style().unpolish(self)
             self.style().polish(self)
             self.update()
             self.repaint()
             
-            self.logger.info(f"Logging theme refreshed to {theme_name} mode")
+            # Also force update on parent if it exists
+            if self.parent():
+                self.parent().update()
+            
+            self.logger.info(f"Logging theme comprehensively refreshed to {theme_name} mode - ALL elements styled")
             
         except Exception as e:
             self.logger.error(f"Error refreshing logging theme: {e}")
