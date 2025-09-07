@@ -7,6 +7,7 @@ Provides syntax highlighting, line numbers, and basic editing features.
 
 import os
 import asyncio
+import json
 from pathlib import Path
 from typing import Optional, Dict
 from datetime import datetime
@@ -428,6 +429,26 @@ class IntegratedTextEditor(QDialog):
         find_action.triggered.connect(self.show_find_dialog)
         edit_menu.addAction(find_action)
         
+        # Format menu
+        format_menu = menu_bar.addMenu("&Format")
+        
+        format_json_action = QAction("Format &JSON", self)
+        format_json_action.setShortcut(QKeySequence("Ctrl+Shift+F"))
+        format_json_action.triggered.connect(self.format_json)
+        format_menu.addAction(format_json_action)
+        
+        minify_json_action = QAction("&Minify JSON", self)
+        minify_json_action.setShortcut(QKeySequence("Ctrl+Shift+M"))
+        minify_json_action.triggered.connect(self.minify_json)
+        format_menu.addAction(minify_json_action)
+        
+        format_menu.addSeparator()
+        
+        validate_json_action = QAction("&Validate JSON", self)
+        validate_json_action.setShortcut(QKeySequence("Ctrl+Shift+V"))
+        validate_json_action.triggered.connect(self.validate_json)
+        format_menu.addAction(validate_json_action)
+        
         layout.addWidget(menu_bar)
         
     def setup_toolbar(self, layout):
@@ -448,6 +469,44 @@ class IntegratedTextEditor(QDialog):
         self.auto_save_checkbox.setChecked(True)
         self.auto_save_checkbox.stateChanged.connect(self.toggle_auto_save)
         toolbar_layout.addWidget(self.auto_save_checkbox)
+        
+        # JSON format button
+        format_json_btn = QPushButton("📝 Format JSON")
+        format_json_btn.setToolTip("Format JSON with proper indentation (Ctrl+Shift+F)")
+        format_json_btn.clicked.connect(self.format_json)
+        format_json_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 3px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        toolbar_layout.addWidget(format_json_btn)
+        
+        # JSON validate button
+        validate_json_btn = QPushButton("✓ Validate")
+        validate_json_btn.setToolTip("Validate JSON syntax (Ctrl+Shift+V)")
+        validate_json_btn.clicked.connect(self.validate_json)
+        validate_json_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 3px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+        """)
+        toolbar_layout.addWidget(validate_json_btn)
         
         layout.addWidget(toolbar_frame)
         
@@ -628,6 +687,153 @@ class IntegratedTextEditor(QDialog):
             found = self.editor.find(text)
             if not found:
                 self.status_label.setText(f"Text '{text}' not found")
+                
+    def format_json(self):
+        """Format JSON content with proper indentation."""
+        try:
+            # Get current text
+            current_text = self.editor.toPlainText().strip()
+            
+            if not current_text:
+                self.status_label.setText("No content to format")
+                return
+                
+            # Parse JSON
+            try:
+                parsed_json = json.loads(current_text)
+            except json.JSONDecodeError as e:
+                QMessageBox.warning(
+                    self, 
+                    "JSON Format Error",
+                    f"Invalid JSON content:\n{str(e)}\n\nPlease fix the JSON syntax and try again."
+                )
+                self.status_label.setText("JSON formatting failed - invalid syntax")
+                return
+            
+            # Format with indentation
+            formatted_json = json.dumps(parsed_json, indent=4, ensure_ascii=False, sort_keys=True)
+            
+            # Preserve cursor position relative to content
+            cursor = self.editor.textCursor()
+            scroll_position = self.editor.verticalScrollBar().value()
+            
+            # Replace content
+            self.editor.setPlainText(formatted_json)
+            
+            # Restore approximate scroll position
+            self.editor.verticalScrollBar().setValue(scroll_position)
+            
+            self.status_label.setText("JSON formatted successfully")
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "Format Error", 
+                f"Failed to format JSON:\n{str(e)}"
+            )
+            self.status_label.setText("JSON formatting failed")
+            
+    def minify_json(self):
+        """Minify JSON content by removing whitespace."""
+        try:
+            # Get current text
+            current_text = self.editor.toPlainText().strip()
+            
+            if not current_text:
+                self.status_label.setText("No content to minify")
+                return
+                
+            # Parse JSON
+            try:
+                parsed_json = json.loads(current_text)
+            except json.JSONDecodeError as e:
+                QMessageBox.warning(
+                    self, 
+                    "JSON Minify Error",
+                    f"Invalid JSON content:\n{str(e)}\n\nPlease fix the JSON syntax and try again."
+                )
+                self.status_label.setText("JSON minification failed - invalid syntax")
+                return
+            
+            # Minify (no indentation, no extra spaces)
+            minified_json = json.dumps(parsed_json, separators=(',', ':'), ensure_ascii=False)
+            
+            # Replace content
+            self.editor.setPlainText(minified_json)
+            
+            self.status_label.setText("JSON minified successfully")
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "Minify Error", 
+                f"Failed to minify JSON:\n{str(e)}"
+            )
+            self.status_label.setText("JSON minification failed")
+            
+    def validate_json(self):
+        """Validate JSON syntax and show detailed information."""
+        try:
+            # Get current text
+            current_text = self.editor.toPlainText().strip()
+            
+            if not current_text:
+                QMessageBox.information(self, "JSON Validation", "No content to validate")
+                self.status_label.setText("No content to validate")
+                return
+                
+            # Parse JSON
+            try:
+                parsed_json = json.loads(current_text)
+                
+                # Count elements for information
+                if isinstance(parsed_json, dict):
+                    element_count = len(parsed_json)
+                    element_type = "object"
+                elif isinstance(parsed_json, list):
+                    element_count = len(parsed_json)
+                    element_type = "array"
+                else:
+                    element_count = 1
+                    element_type = "value"
+                
+                # Show success message with details
+                QMessageBox.information(
+                    self, 
+                    "JSON Validation",
+                    f"✅ Valid JSON!\n\n"
+                    f"Type: {element_type}\n"
+                    f"Elements: {element_count}\n"
+                    f"Size: {len(current_text)} characters"
+                )
+                self.status_label.setText("JSON is valid")
+                
+            except json.JSONDecodeError as e:
+                # Show detailed error information
+                error_details = f"❌ Invalid JSON!\n\n"
+                error_details += f"Error: {e.msg}\n"
+                error_details += f"Line: {e.lineno}\n"
+                error_details += f"Column: {e.colno}\n"
+                
+                if e.pos:
+                    error_details += f"Position: {e.pos}\n"
+                    
+                    # Try to show the problematic part
+                    start_pos = max(0, e.pos - 20)
+                    end_pos = min(len(current_text), e.pos + 20)
+                    context = current_text[start_pos:end_pos]
+                    error_details += f"\nContext: ...{context}..."
+                
+                QMessageBox.warning(self, "JSON Validation", error_details)
+                self.status_label.setText("JSON validation failed")
+                
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "Validation Error", 
+                f"Failed to validate JSON:\n{str(e)}"
+            )
+            self.status_label.setText("JSON validation error")
                 
     def close_editor(self):
         """Close the editor with save confirmation if needed."""

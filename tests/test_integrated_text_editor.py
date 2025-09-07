@@ -116,6 +116,113 @@ class TestIntegratedTextEditor:
         editor.auto_save_checkbox.setChecked(True)
         editor.toggle_auto_save(Qt.CheckState.Checked.value)
         assert editor.auto_save_timer.isActive()
+    
+    def test_json_formatting(self):
+        """Test JSON formatting functionality."""
+        editor = IntegratedTextEditor(self.file_info, self.mock_file_ops)
+        
+        # Test valid JSON formatting
+        test_json = '{"name":"John","age":30,"city":"New York"}'
+        editor.editor.setPlainText(test_json)
+        
+        # Call format_json method
+        editor.format_json()
+        
+        # Get formatted result
+        formatted_text = editor.editor.toPlainText()
+        
+        # Verify it's properly formatted
+        import json
+        parsed = json.loads(formatted_text)
+        expected = json.dumps(parsed, indent=4, ensure_ascii=False, sort_keys=True)
+        assert formatted_text == expected
+        
+    def test_json_minification(self):
+        """Test JSON minification functionality."""
+        editor = IntegratedTextEditor(self.file_info, self.mock_file_ops)
+        
+        # Test JSON minification
+        formatted_json = '''{\n    "name": "John",\n    "age": 30,\n    "city": "New York"\n}'''
+        editor.editor.setPlainText(formatted_json)
+        
+        # Call minify_json method
+        editor.minify_json()
+        
+        # Get minified result
+        minified_text = editor.editor.toPlainText()
+        
+        # Verify it's properly minified
+        import json
+        parsed = json.loads(minified_text)
+        expected = json.dumps(parsed, separators=(',', ':'), ensure_ascii=False)
+        assert minified_text == expected
+        
+    def test_json_validation_valid(self):
+        """Test JSON validation with valid JSON."""
+        editor = IntegratedTextEditor(self.file_info, self.mock_file_ops)
+        
+        # Test valid JSON
+        valid_json = '{"name":"John","age":30}'
+        editor.editor.setPlainText(valid_json)
+        
+        # Mock the message box to capture the validation result
+        with patch('PyQt6.QtWidgets.QMessageBox.information') as mock_msg:
+            editor.validate_json()
+            
+            # Verify that information dialog was called (indicating valid JSON)
+            mock_msg.assert_called_once()
+            args = mock_msg.call_args[0]
+            assert "Valid JSON" in args[1]
+            
+    def test_json_validation_invalid(self):
+        """Test JSON validation with invalid JSON."""
+        editor = IntegratedTextEditor(self.file_info, self.mock_file_ops)
+        
+        # Test invalid JSON
+        invalid_json = '{"name":"John","age":30'  # Missing closing brace
+        editor.editor.setPlainText(invalid_json)
+        
+        # Mock the message box to capture the validation result
+        with patch('PyQt6.QtWidgets.QMessageBox.warning') as mock_msg:
+            editor.validate_json()
+            
+            # Verify that warning dialog was called (indicating invalid JSON)
+            mock_msg.assert_called_once()
+            args = mock_msg.call_args[0]
+            assert "Invalid JSON" in args[1]
+            
+    def test_json_formatting_empty_content(self):
+        """Test JSON formatting with empty content."""
+        editor = IntegratedTextEditor(self.file_info, self.mock_file_ops)
+        
+        # Test with empty content
+        editor.editor.setPlainText("")
+        
+        # Call format_json method
+        editor.format_json()
+        
+        # Content should remain empty
+        assert editor.editor.toPlainText() == ""
+        
+    def test_json_formatting_invalid_content(self):
+        """Test JSON formatting with invalid JSON content."""
+        editor = IntegratedTextEditor(self.file_info, self.mock_file_ops)
+        
+        # Test with invalid JSON
+        invalid_json = '{"name":"John","age":30'
+        editor.editor.setPlainText(invalid_json)
+        
+        # Mock the message box to capture the error
+        with patch('PyQt6.QtWidgets.QMessageBox.warning') as mock_msg:
+            editor.format_json()
+            
+            # Verify that warning dialog was called
+            mock_msg.assert_called_once()
+            args = mock_msg.call_args[0]
+            assert "Invalid JSON content" in args[1]
+            
+        # Content should remain unchanged
+        assert editor.editor.toPlainText() == invalid_json
 
 
 class TestFileDownloadWorker:
