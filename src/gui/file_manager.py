@@ -151,6 +151,47 @@ class FileManager(QWidget):
         self.load_device_directory()
         self.logger.info("File manager initialization complete")
     
+    def get_short_device_name(self, device_id: str) -> str:
+        """Get a short, user-friendly device name."""
+        if not device_id:
+            return "Unknown Device"
+        
+        # If it's an emulator, show just "Emulator-XXXX"
+        if "emulator" in device_id.lower():
+            port = device_id.split('-')[-1]
+            return f"Emulator-{port}"
+        
+        # If it's a long serial number, show brand info if possible + last chars
+        if len(device_id) > 12:
+            # Try to identify common device patterns
+            if device_id.startswith('R58'):  # Pixel devices often start with this
+                return f"Pixel-{device_id[-6:]}"
+            elif device_id.startswith('RF8') or device_id.startswith('RF9'):
+                return f"Samsung-{device_id[-6:]}"
+            elif len(device_id) > 16:  # Very long serial
+                return f"Device-{device_id[-8:]}"
+            else:
+                return f"Device-{device_id[-6:]}"
+        
+        # Otherwise show the full device ID but limit length
+        return device_id[:25] + "..." if len(device_id) > 25 else device_id
+    
+    def get_short_device_name(self, device_id: str) -> str:
+        """Get a short, user-friendly device name."""
+        if not device_id:
+            return "Unknown Device"
+        
+        # If it's an emulator, show just "Emulator-XXXX"
+        if "emulator" in device_id.lower():
+            return f"Emulator-{device_id.split('-')[-1]}"
+        
+        # If it's a serial number, show last 8 characters
+        if len(device_id) > 12:
+            return f"Device-{device_id[-8:]}"
+
+        # Otherwise show the full device ID but limit length
+        return device_id[:20] + "..." if len(device_id) > 20 else device_id
+
     def init_ui(self):
         """Initialize the file manager UI."""
         layout = QVBoxLayout(self)
@@ -175,8 +216,8 @@ class FileManager(QWidget):
         device_panel = self.create_device_panel()
         splitter.addWidget(device_panel)
         
-        # Set splitter proportions
-        splitter.setSizes([400, 100, 400])
+        # Set splitter proportions - larger file panels, smaller transfer panel
+        splitter.setSizes([450, 80, 450])
         
         # Create progress panel
         progress_panel = self.create_progress_panel()
@@ -186,37 +227,59 @@ class FileManager(QWidget):
         """Create the file manager toolbar."""
         toolbar_frame = QFrame()
         toolbar_frame.setFrameStyle(QFrame.Shape.StyledPanel)
+        toolbar_frame.setMaximumHeight(35)  # Make toolbar very compact
+        toolbar_frame.setMinimumHeight(35)
         toolbar_layout = QHBoxLayout(toolbar_frame)
+        toolbar_layout.setContentsMargins(5, 2, 5, 2)  # Smaller margins
+        toolbar_layout.setSpacing(5)  # Smaller spacing
         
-        # Device info
-        device_label = QLabel(f"📱 Device: {self.device_id}")
-        device_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        # Device info - show short device name only
+        short_device_name = self.get_short_device_name(self.device_id)
+        device_label = QLabel(f"📱 {short_device_name}")
+        device_label.setFont(QFont("Arial", 8, QFont.Weight.Bold))  # Even smaller font
+        device_label.setMaximumWidth(180)  # Slightly larger width for name
+        device_label.setStyleSheet("color: #4CAF50;")  # Green color to make it stand out
+        device_label.setToolTip(f"Full Device ID: {self.device_id}")  # Show full ID in tooltip
         toolbar_layout.addWidget(device_label)
         
         toolbar_layout.addStretch()
         
-        # Action buttons
+        # Action buttons - auto-size based on text content
         refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn.setToolTip("Refresh files")
+        refresh_btn.setMaximumHeight(28)
+        refresh_btn.setSizePolicy(refresh_btn.sizePolicy().horizontalPolicy(), refresh_btn.sizePolicy().verticalPolicy())
         refresh_btn.clicked.connect(self.refresh_files)
         toolbar_layout.addWidget(refresh_btn)
         
-        new_folder_btn = QPushButton("📁 New Folder")
+        new_folder_btn = QPushButton("📁 New")
+        new_folder_btn.setToolTip("New Folder")
+        new_folder_btn.setMaximumHeight(28)
+        new_folder_btn.setSizePolicy(new_folder_btn.sizePolicy().horizontalPolicy(), new_folder_btn.sizePolicy().verticalPolicy())
         new_folder_btn.clicked.connect(self.create_new_folder)
         toolbar_layout.addWidget(new_folder_btn)
         
-        # Quick navigation buttons
+        # Quick navigation buttons - auto-size based on text
         home_btn = QPushButton("🏠 Home")
+        home_btn.setToolTip("Home (/sdcard/)")
+        home_btn.setMaximumHeight(28)
+        home_btn.setSizePolicy(home_btn.sizePolicy().horizontalPolicy(), home_btn.sizePolicy().verticalPolicy())
         home_btn.clicked.connect(lambda: self.navigate_to_device_path("/sdcard/"))
         toolbar_layout.addWidget(home_btn)
         
         root_btn = QPushButton("📂 Root")
+        root_btn.setToolTip("Root (/)")
+        root_btn.setMaximumHeight(28)
+        root_btn.setSizePolicy(root_btn.sizePolicy().horizontalPolicy(), root_btn.sizePolicy().verticalPolicy())
         root_btn.clicked.connect(lambda: self.navigate_to_device_path("/"))
         toolbar_layout.addWidget(root_btn)
         
-        # Test connection button
+        # Test connection button - auto-size based on text
         test_btn = QPushButton("🔗 Test")
-        test_btn.clicked.connect(self.test_device_connection)
         test_btn.setToolTip("Test device connection")
+        test_btn.setMaximumHeight(28)
+        test_btn.setSizePolicy(test_btn.sizePolicy().horizontalPolicy(), test_btn.sizePolicy().verticalPolicy())
+        test_btn.clicked.connect(self.test_device_connection)
         toolbar_layout.addWidget(test_btn)
         
         return toolbar_frame
@@ -229,8 +292,10 @@ class FileManager(QWidget):
         
         # Header
         header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(2, 2, 2, 2)  # Smaller margins
+        header_layout.setSpacing(5)  # Smaller spacing
         header_label = QLabel("💻 Local Files")
-        header_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        header_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))  # Slightly smaller
         header_layout.addWidget(header_label)
         
         # Path input
@@ -289,8 +354,10 @@ class FileManager(QWidget):
         
         # Header
         header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(2, 2, 2, 2)  # Smaller margins
+        header_layout.setSpacing(5)  # Smaller spacing
         header_label = QLabel("📱 Device Files")
-        header_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        header_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))  # Slightly smaller
         header_layout.addWidget(header_label)
         
         # Path input
@@ -342,29 +409,27 @@ class FileManager(QWidget):
         """Create the transfer controls panel."""
         panel = QFrame()
         panel.setFrameStyle(QFrame.Shape.StyledPanel)
-        panel.setMaximumWidth(120)
+        panel.setMaximumWidth(90)  # Reduced from 120
+        panel.setMinimumWidth(90)
         layout = QVBoxLayout(panel)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(10)  # Reduced spacing
         
-        # Transfer buttons
+        # Transfer buttons - more compact
         push_btn = QPushButton("➡️\nPush")
-        push_btn.setMinimumHeight(60)
+        push_btn.setMinimumHeight(50)  # Reduced from 60
         push_btn.clicked.connect(self.push_file)
         push_btn.setToolTip("Push selected local files to device")
         layout.addWidget(push_btn)
         
-        layout.addSpacing(20)
-        
         pull_btn = QPushButton("⬅️\nPull")
-        pull_btn.setMinimumHeight(60)
+        pull_btn.setMinimumHeight(50)  # Reduced from 60
         pull_btn.clicked.connect(self.pull_file)
         pull_btn.setToolTip("Pull selected device files to local")
         layout.addWidget(pull_btn)
         
-        layout.addSpacing(20)
-        
         sync_btn = QPushButton("🔄\nSync")
-        sync_btn.setMinimumHeight(60)
+        sync_btn.setMinimumHeight(50)  # Reduced from 60
         sync_btn.clicked.connect(self.sync_folders)
         sync_btn.setToolTip("Sync folders between local and device")
         layout.addWidget(sync_btn)
@@ -377,24 +442,30 @@ class FileManager(QWidget):
         """Create the file transfer progress panel."""
         panel = QFrame()
         panel.setFrameStyle(QFrame.Shape.StyledPanel)
-        panel.setMaximumHeight(100)
+        panel.setMaximumHeight(60)  # Even smaller from 80
+        panel.setMinimumHeight(60)
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(3, 3, 3, 3)  # Even smaller margins
+        layout.setSpacing(2)  # Minimal spacing
         
         # Progress info
         progress_layout = QHBoxLayout()
         
         self.progress_label = QLabel("Ready")
+        self.progress_label.setFont(QFont("Arial", 8))  # Even smaller font
         progress_layout.addWidget(self.progress_label)
         
         progress_layout.addStretch()
         
         self.speed_label = QLabel("")
+        self.speed_label.setFont(QFont("Arial", 8))  # Even smaller font
         progress_layout.addWidget(self.speed_label)
         
         layout.addLayout(progress_layout)
         
         # Progress bar
         self.progress_bar = QProgressBar()
+        self.progress_bar.setMaximumHeight(16)  # Even thinner progress bar
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
         
