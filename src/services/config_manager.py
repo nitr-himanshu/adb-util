@@ -71,7 +71,11 @@ class ConfigManager:
             "last_paths": {
                 "local": str(Path.home()),
                 "device": "/sdcard/"
-            }
+            },
+            "custom_editors": [],
+            "default_editor": None,
+            "live_edit_enabled": True,
+            "auto_upload_on_save": True
         }
     
     def add_bookmark(self, path: str, location_type: str, name: str = None):
@@ -159,3 +163,49 @@ class ConfigManager:
         elif location_type == "device":
             return last_paths.get("device", "/sdcard/")
         return ""
+    
+    def add_custom_editor(self, name: str, command: str):
+        """Add a custom editor."""
+        custom_editors = self.get("custom_editors", [])
+        
+        # Check if editor already exists
+        for editor in custom_editors:
+            if editor.get("name") == name:
+                # Update existing
+                editor["command"] = command
+                self.set("custom_editors", custom_editors)
+                return
+        
+        # Add new editor
+        custom_editors.append({
+            "name": name,
+            "command": command,
+            "added": datetime.now().isoformat()
+        })
+        self.set("custom_editors", custom_editors)
+    
+    def remove_custom_editor(self, name: str):
+        """Remove a custom editor."""
+        custom_editors = self.get("custom_editors", [])
+        custom_editors = [e for e in custom_editors if e.get("name") != name]
+        self.set("custom_editors", custom_editors)
+    
+    def get_custom_editors(self) -> list:
+        """Get list of custom editors."""
+        return self.get("custom_editors", [])
+    
+    def set_default_editor(self, command: str):
+        """Set the default editor command."""
+        self.set("default_editor", command)
+    
+    def get_default_editor(self) -> str:
+        """Get the default editor command."""
+        return self.get("default_editor", None)
+    
+    def get_setting(self, key: str, default: Any = None) -> Any:
+        """Get a specific setting value."""
+        return self.get(key, default)
+    
+    def set_setting(self, key: str, value: Any):
+        """Set a specific setting value."""
+        self.set(key, value)

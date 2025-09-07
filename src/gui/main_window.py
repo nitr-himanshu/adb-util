@@ -69,9 +69,10 @@ class MainWindow(QMainWindow):
         self.current_device = None
         self.discovery_worker = None
         
-        # Timer for periodic device refresh
+        # Timer for periodic device refresh (2 minutes)
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.auto_refresh_devices)
+        self.refresh_timer.start(120000)  # 2 minutes
         
         # Initialize theme manager
         self.init_theme_manager()
@@ -361,8 +362,7 @@ class MainWindow(QMainWindow):
         """Initialize device discovery."""
         # Initial device discovery
         self.refresh_devices()
-        # Start periodic refresh (every 10 seconds)
-        self.refresh_timer.start(10000)
+        # Periodic refresh already set to 2 minutes in __init__
     
     def update_device_list(self, devices):
         """Update the device list widget."""

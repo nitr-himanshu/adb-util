@@ -21,9 +21,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QDir, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QFont, QFileSystemModel, QAction
 
-from adb.file_operations import FileOperations, FileInfo
-from utils.logger import get_logger, log_file_operation
-from services.config_manager import ConfigManager
+from src.adb.file_operations import FileOperations, FileInfo
+from src.utils.logger import get_logger, log_file_operation
+from src.services.config_manager import ConfigManager
+from src.services.live_editor import LiveEditorService
 
 
 class FileTransferWorker(QThread):
@@ -133,6 +134,50 @@ class DirectoryListWorker(QThread):
             self.listing_failed.emit(f"Error listing directory: {str(e)}")
 
 
+class LiveEditWorker(QThread):
+    """Worker thread for live editing operations."""
+    
+    session_started = pyqtSignal(str)  # device_path
+    session_failed = pyqtSignal(str, str)  # device_path, error_message
+    
+    def __init__(self, file_info: FileInfo, file_ops: FileOperations, 
+                 live_editor: LiveEditorService, editor_command: str):
+        super().__init__()
+        self.file_info = file_info
+        self.file_ops = file_ops
+        self.live_editor = live_editor
+        self.editor_command = editor_command
+        self.logger = get_logger(__name__)
+    
+    def run(self):
+        """Execute the live editing session start."""
+        try:
+            # Create event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                success = loop.run_until_complete(
+                    self.live_editor.start_live_edit_session(
+                        self.file_info,
+                        self.file_ops,
+                        self.editor_command
+                    )
+                )
+                
+                if success:
+                    self.session_started.emit(self.file_info.path)
+                else:
+                    self.session_failed.emit(self.file_info.path, "Failed to start editing session")
+                    
+            finally:
+                loop.close()
+                
+        except Exception as e:
+            self.logger.error(f"Error in live edit worker: {e}")
+            self.session_failed.emit(self.file_info.path, f"Error: {str(e)}")
+
+
 class FileManager(QWidget):
     """File manager widget with local and device file browsers."""
     
@@ -146,7 +191,15 @@ class FileManager(QWidget):
         self.file_ops = FileOperations(device_id)
         self.transfer_worker = None
         self.listing_worker = None
+        self.live_edit_worker = None
         self.config = ConfigManager()
+        
+        # Live editor service
+        self.live_editor = LiveEditorService()
+        self.live_editor.session_started.connect(self.on_live_edit_started)
+        self.live_editor.session_ended.connect(self.on_live_edit_ended)
+        self.live_editor.file_uploaded.connect(self.on_file_uploaded)
+        self.live_editor.error_occurred.connect(self.on_live_edit_error)
         
         # Load last used paths
         self.current_local_path = self.config.get_last_path("local")
@@ -935,6 +988,18 @@ class FileManager(QWidget):
         """Show context menu for device files."""
         menu = QMenu(self)
         
+        # Get selected files
+        selected_files = self.get_selected_device_files()
+        if not selected_files:
+            return
+        
+        # Only show "Open with..." for single file (not directory) selection
+        if len(selected_files) == 1 and not selected_files[0].is_directory:
+            open_with_action = QAction("📝 Open with...", self)
+            open_with_action.triggered.connect(self.open_device_file_with_editor)
+            menu.addAction(open_with_action)
+            menu.addSeparator()
+        
         download_action = QAction("⬇️ Download to Local", self)
         download_action.triggered.connect(self.download_selected_files)
         menu.addAction(download_action)
@@ -1146,8 +1211,168 @@ class FileManager(QWidget):
             if self.listing_worker and self.listing_worker.isRunning():
                 self.listing_worker.terminate()
                 self.listing_worker.wait(1000)
+            
+            if self.live_edit_worker and self.live_edit_worker.isRunning():
+                self.live_edit_worker.terminate()
+                self.live_edit_worker.wait(1000)
+            
+            # Clean up live editor service
+            if hasattr(self, 'live_editor'):
+                self.live_editor.cleanup()
                 
             self.logger.info("File manager cleanup completed")
             
         except Exception as e:
             self.logger.error(f"Error during cleanup: {e}")
+    
+    def open_device_file_with_editor(self):
+        """Open selected device file with external editor."""
+        try:
+            selected_files = self.get_selected_device_files()
+            if not selected_files or len(selected_files) != 1:
+                QMessageBox.information(self, "Invalid Selection", "Please select exactly one file to edit.")
+                return
+            
+            file_info = selected_files[0]
+            if file_info.is_directory:
+                QMessageBox.information(self, "Invalid Selection", "Cannot edit directories. Please select a file.")
+                return
+            
+            # Check if session already active
+            if self.live_editor.is_session_active(file_info.path):
+                QMessageBox.information(
+                    self, 
+                    "Already Editing", 
+                    f"File '{file_info.name}' is already being edited.\n"
+                    "Please close the existing editor before opening a new one."
+                )
+                return
+            
+            # Get available editors
+            available_editors = self.live_editor.get_available_editors()
+            if not available_editors:
+                QMessageBox.warning(
+                    self, 
+                    "No Editors Found", 
+                    "No supported editors found on your system.\n"
+                    "Please install VS Code, Notepad++, or another text editor."
+                )
+                return
+            
+            # Let user choose editor
+            editor_command = self.select_editor(available_editors)
+            if not editor_command:
+                return  # User cancelled
+            
+            # Start live edit session in a worker thread
+            self.start_live_edit_worker(file_info, editor_command)
+            
+        except Exception as e:
+            self.logger.error(f"Error opening file with editor: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open file with editor: {str(e)}")
+    
+    def select_editor(self, available_editors) -> Optional[str]:
+        """Let user select an editor from available options."""
+        from PyQt6.QtWidgets import QInputDialog
+        
+        # Create list of editor names
+        editor_names = [editor["name"] for editor in available_editors]
+        
+        # Add option for custom command
+        editor_names.append("Custom Command...")
+        
+        # Show selection dialog
+        choice, ok = QInputDialog.getItem(
+            self,
+            "Select Editor",
+            "Choose an editor to open the file:",
+            editor_names,
+            0,
+            False
+        )
+        
+        if not ok:
+            return None
+        
+        if choice == "Custom Command...":
+            # Prompt for custom command
+            command, ok = QInputDialog.getText(
+                self,
+                "Custom Editor Command",
+                "Enter the command to open files:"
+            )
+            return command if ok else None
+        else:
+            # Find selected editor command
+            for editor in available_editors:
+                if editor["name"] == choice:
+                    return editor["command"]
+        
+        return None
+    
+    def start_live_edit_worker(self, file_info: FileInfo, editor_command: str):
+        """Start live editing session using a worker thread."""
+        try:
+            self.progress_label.setText(f"Preparing to edit {file_info.name}...")
+            
+            # Create and start worker thread for live editing
+            self.live_edit_worker = LiveEditWorker(file_info, self.file_ops, self.live_editor, editor_command)
+            self.live_edit_worker.session_started.connect(self.on_live_edit_worker_started)
+            self.live_edit_worker.session_failed.connect(self.on_live_edit_worker_failed)
+            self.live_edit_worker.start()
+            
+        except Exception as e:
+            self.logger.error(f"Error starting live edit worker: {e}")
+            self.progress_label.setText(f"Error starting editor: {str(e)}")
+    
+    def on_live_edit_worker_started(self, device_path: str):
+        """Handle successful start of live edit session from worker."""
+        filename = device_path.split('/')[-1]
+        self.progress_label.setText(f"📝 Editing {filename} - changes will auto-sync")
+        self.logger.info(f"Worker started editing {device_path}")
+    
+    def on_live_edit_worker_failed(self, device_path: str, error_message: str):
+        """Handle failed start of live edit session from worker."""
+        filename = device_path.split('/')[-1]
+        self.progress_label.setText(f"❌ Failed to start editing {filename}")
+        self.logger.error(f"Worker failed to start editing {device_path}: {error_message}")
+        QMessageBox.critical(
+            self, 
+            "Live Edit Error", 
+            f"Failed to start editing {filename}:\n{error_message}"
+        )
+    
+    def on_live_edit_started(self, device_path: str):
+        """Handle live edit session started."""
+        filename = device_path.split('/')[-1]
+        self.progress_label.setText(f"📝 Editing {filename} - changes will auto-sync")
+        self.logger.info(f"Started editing {device_path}")
+    
+    def on_live_edit_ended(self, device_path: str, success: bool):
+        """Handle live edit session ended."""
+        filename = device_path.split('/')[-1]
+        if success:
+            self.progress_label.setText(f"✅ Finished editing {filename} - changes saved")
+            # Refresh device directory to show any changes
+            self.load_device_directory()
+        else:
+            self.progress_label.setText(f"❌ Error editing {filename}")
+        
+        self.logger.info(f"Ended editing {device_path} (success: {success})")
+    
+    def on_file_uploaded(self, device_path: str):
+        """Handle file uploaded during live editing."""
+        filename = device_path.split('/')[-1]
+        self.progress_label.setText(f"💾 Uploaded changes to {filename}")
+        # Refresh device directory to show updated file
+        self.load_device_directory()
+    
+    def on_live_edit_error(self, device_path: str, error_message: str):
+        """Handle live edit error."""
+        filename = device_path.split('/')[-1]
+        self.logger.error(f"Live edit error for {device_path}: {error_message}")
+        QMessageBox.critical(
+            self, 
+            "Live Edit Error", 
+            f"Error editing {filename}:\n{error_message}"
+        )
