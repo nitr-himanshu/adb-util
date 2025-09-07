@@ -23,6 +23,7 @@ from PyQt6.QtGui import QStandardItemModel, QStandardItem, QFont, QFileSystemMod
 
 from adb.file_operations import FileOperations, FileInfo
 from utils.logger import get_logger, log_file_operation
+from services.config_manager import ConfigManager
 
 
 class FileTransferWorker(QThread):
@@ -145,6 +146,11 @@ class FileManager(QWidget):
         self.file_ops = FileOperations(device_id)
         self.transfer_worker = None
         self.listing_worker = None
+        self.config = ConfigManager()
+        
+        # Load last used paths
+        self.current_local_path = self.config.get_last_path("local")
+        self.current_device_path = self.config.get_last_path("device")
         
         self.logger.info(f"Initializing file manager for device: {device_id}")
         self.init_ui()
@@ -290,32 +296,55 @@ class FileManager(QWidget):
         panel.setFrameStyle(QFrame.Shape.StyledPanel)
         layout = QVBoxLayout(panel)
         
-        # Header
+        # Header - more compact
         header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(2, 2, 2, 2)  # Smaller margins
-        header_layout.setSpacing(5)  # Smaller spacing
-        header_label = QLabel("💻 Local Files")
-        header_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))  # Slightly smaller
+        header_layout.setContentsMargins(2, 1, 2, 1)  # Even smaller margins
+        header_layout.setSpacing(3)  # Smaller spacing
+        header_label = QLabel("💻 Local")  # Shorter text
+        header_label.setFont(QFont("Arial", 9, QFont.Weight.Bold))  # Smaller font
+        header_label.setMaximumWidth(80)  # Compact width
         header_layout.addWidget(header_label)
         
-        # Path input
-        self.local_path_input = QLineEdit()
-        self.local_path_input.setText(str(Path.home()))
-        self.local_path_input.returnPressed.connect(self.navigate_local_folder)
-        header_layout.addWidget(self.local_path_input)
+        # Path input with history and bookmarks
+        path_layout = QHBoxLayout()
         
+        # Path ComboBox with history - make it much larger for long paths
+        self.local_path_combo = QComboBox()
+        self.local_path_combo.setEditable(True)
+        self.local_path_combo.setMinimumWidth(500)  # Much larger for long paths
+        self.local_path_combo.setMaximumHeight(26)  # Slightly taller for readability
+        self.local_path_combo.currentTextChanged.connect(self.on_local_path_changed)
+        self.local_path_combo.lineEdit().returnPressed.connect(self.navigate_local_folder)
+        self.populate_local_path_combo()
+        path_layout.addWidget(self.local_path_combo)
+        
+        # Browse button - proper size for text
         browse_btn = QPushButton("Browse")
+        browse_btn.setMinimumWidth(65)  # Ensure text fits
+        browse_btn.setMaximumWidth(65)
+        browse_btn.setMaximumHeight(26)  # Match ComboBox height
         browse_btn.clicked.connect(self.browse_local_folder)
-        header_layout.addWidget(browse_btn)
+        path_layout.addWidget(browse_btn)
+        
+        # Bookmark button
+        bookmark_local_btn = QPushButton("⭐")
+        bookmark_local_btn.setMinimumWidth(28)
+        bookmark_local_btn.setMaximumWidth(28)
+        bookmark_local_btn.setMaximumHeight(26)  # Match ComboBox height
+        bookmark_local_btn.setToolTip("Bookmark this location")
+        bookmark_local_btn.clicked.connect(self.bookmark_local_path)
+        path_layout.addWidget(bookmark_local_btn)
+        
+        header_layout.addLayout(path_layout)
         
         layout.addLayout(header_layout)
         
         # File tree view
         self.local_tree = QTreeView()
         self.local_model = QFileSystemModel()
-        self.local_model.setRootPath(str(Path.home()))
+        self.local_model.setRootPath(self.current_local_path)
         self.local_tree.setModel(self.local_model)
-        self.local_tree.setRootIndex(self.local_model.index(str(Path.home())))
+        self.local_tree.setRootIndex(self.local_model.index(self.current_local_path))
         
         # Enable multi-selection
         self.local_tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -331,16 +360,23 @@ class FileManager(QWidget):
         
         layout.addWidget(self.local_tree)
         
-        # Local file actions
+        # Local file actions - more compact buttons
         local_actions = QHBoxLayout()
+        local_actions.setSpacing(5)
         
         upload_btn = QPushButton("⬆️ Upload")
+        upload_btn.setMaximumWidth(75)  # More compact
+        upload_btn.setMaximumHeight(28)
         upload_btn.clicked.connect(self.upload_selected_files)
         local_actions.addWidget(upload_btn)
         
         delete_local_btn = QPushButton("🗑️ Delete")
+        delete_local_btn.setMaximumWidth(75)  # More compact
+        delete_local_btn.setMaximumHeight(28)
         delete_local_btn.clicked.connect(self.delete_local_file)
         local_actions.addWidget(delete_local_btn)
+        
+        local_actions.addStretch()  # Push buttons to left
         
         layout.addLayout(local_actions)
         
@@ -352,28 +388,55 @@ class FileManager(QWidget):
         panel.setFrameStyle(QFrame.Shape.StyledPanel)
         layout = QVBoxLayout(panel)
         
-        # Header
+        # Header - more compact
         header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(2, 2, 2, 2)  # Smaller margins
-        header_layout.setSpacing(5)  # Smaller spacing
-        header_label = QLabel("📱 Device Files")
-        header_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))  # Slightly smaller
+        header_layout.setContentsMargins(2, 1, 2, 1)  # Even smaller margins
+        header_layout.setSpacing(3)  # Smaller spacing
+        header_label = QLabel("📱 Device")  # Shorter text
+        header_label.setFont(QFont("Arial", 9, QFont.Weight.Bold))  # Smaller font
+        header_label.setMaximumWidth(80)  # Compact width
         header_layout.addWidget(header_label)
         
-        # Path input
-        self.device_path_input = QLineEdit()
-        self.device_path_input.setText(self.current_device_path)
-        self.device_path_input.returnPressed.connect(self.navigate_device_folder)
-        header_layout.addWidget(self.device_path_input)
+        # Path input with history and bookmarks
+        path_layout = QHBoxLayout()
         
+        # Path ComboBox with history - make it much larger for long paths
+        self.device_path_combo = QComboBox()
+        self.device_path_combo.setEditable(True)
+        self.device_path_combo.setMinimumWidth(450)  # Much larger for long paths
+        self.device_path_combo.setMaximumHeight(26)  # Slightly taller for readability
+        self.device_path_combo.currentTextChanged.connect(self.on_device_path_changed)
+        self.device_path_combo.lineEdit().returnPressed.connect(self.navigate_device_folder)
+        self.populate_device_path_combo()
+        path_layout.addWidget(self.device_path_combo)
+        
+        # Navigate button - proper size for text
         navigate_btn = QPushButton("Go")
+        navigate_btn.setMinimumWidth(40)
+        navigate_btn.setMaximumWidth(40)
+        navigate_btn.setMaximumHeight(26)  # Match ComboBox height
         navigate_btn.clicked.connect(self.navigate_device_folder)
-        header_layout.addWidget(navigate_btn)
+        path_layout.addWidget(navigate_btn)
         
         # Up button
-        up_btn = QPushButton("⬆️ Up")
+        up_btn = QPushButton("⬆️")
+        up_btn.setMinimumWidth(28)
+        up_btn.setMaximumWidth(28)
+        up_btn.setMaximumHeight(26)  # Match ComboBox height
+        up_btn.setToolTip("Go up one level")
         up_btn.clicked.connect(self.go_up_device_directory)
-        header_layout.addWidget(up_btn)
+        path_layout.addWidget(up_btn)
+        
+        # Bookmark button
+        bookmark_device_btn = QPushButton("⭐")
+        bookmark_device_btn.setMinimumWidth(28)
+        bookmark_device_btn.setMaximumWidth(28)
+        bookmark_device_btn.setMaximumHeight(26)  # Match ComboBox height
+        bookmark_device_btn.setToolTip("Bookmark this location")
+        bookmark_device_btn.clicked.connect(self.bookmark_device_path)
+        path_layout.addWidget(bookmark_device_btn)
+        
+        header_layout.addLayout(path_layout)
         
         layout.addLayout(header_layout)
         
@@ -392,12 +455,19 @@ class FileManager(QWidget):
         
         # Device file actions
         device_actions = QHBoxLayout()
+        device_actions.setSpacing(4)  # Minimal spacing
         
         download_btn = QPushButton("⬇️ Download")
+        download_btn.setMinimumWidth(80)
+        download_btn.setMaximumWidth(80)
+        download_btn.setMaximumHeight(28)
         download_btn.clicked.connect(self.download_selected_files)
         device_actions.addWidget(download_btn)
         
         delete_device_btn = QPushButton("🗑️ Delete")
+        delete_device_btn.setMinimumWidth(70)
+        delete_device_btn.setMaximumWidth(70)
+        delete_device_btn.setMaximumHeight(28)
         delete_device_btn.clicked.connect(self.delete_device_file)
         device_actions.addWidget(delete_device_btn)
         
@@ -445,27 +515,31 @@ class FileManager(QWidget):
         panel.setMaximumHeight(60)  # Even smaller from 80
         panel.setMinimumHeight(60)
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(3, 3, 3, 3)  # Even smaller margins
-        layout.setSpacing(2)  # Minimal spacing
+        layout.setContentsMargins(2, 2, 2, 2)  # Minimal margins
+        layout.setSpacing(1)  # Almost no spacing
         
         # Progress info
         progress_layout = QHBoxLayout()
+        progress_layout.setContentsMargins(0, 0, 0, 0)
+        progress_layout.setSpacing(8)
         
         self.progress_label = QLabel("Ready")
-        self.progress_label.setFont(QFont("Arial", 8))  # Even smaller font
+        self.progress_label.setFont(QFont("Arial", 7))  # Smallest readable font
+        self.progress_label.setMaximumHeight(18)  # Limit height
         progress_layout.addWidget(self.progress_label)
         
         progress_layout.addStretch()
         
         self.speed_label = QLabel("")
-        self.speed_label.setFont(QFont("Arial", 8))  # Even smaller font
+        self.speed_label.setFont(QFont("Arial", 7))  # Smallest readable font
+        self.speed_label.setMaximumHeight(18)  # Limit height
         progress_layout.addWidget(self.speed_label)
         
         layout.addLayout(progress_layout)
         
         # Progress bar
         self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumHeight(16)  # Even thinner progress bar
+        self.progress_bar.setMaximumHeight(12)  # Much thinner progress bar
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
         
@@ -542,23 +616,19 @@ class FileManager(QWidget):
     
     def browse_local_folder(self):
         """Browse for local folder."""
-        folder = QFileDialog.getExistingDirectory(self, "Select Folder")
+        folder = QFileDialog.getExistingDirectory(self, "Select Folder", self.current_local_path)
         if folder:
-            self.local_path_input.setText(folder)
-            self.navigate_local_folder()
+            self.navigate_to_local_path(folder)
     
     def navigate_local_folder(self):
-        """Navigate to the folder specified in local path input."""
-        path = self.local_path_input.text()
-        if os.path.exists(path):
-            self.local_tree.setRootIndex(self.local_model.index(path))
-            self.local_model.setRootPath(path)
-        else:
-            QMessageBox.warning(self, "Invalid Path", f"Path does not exist: {path}")
+        """Navigate to the folder specified in local path combo."""
+        path = self.local_path_combo.currentText()
+        if path:
+            self.navigate_to_local_path(path)
     
     def navigate_device_folder(self):
         """Navigate to device folder."""
-        path = self.device_path_input.text().strip()
+        path = self.device_path_combo.currentText().strip()
         if path:
             self.navigate_to_device_path(path)
     
@@ -582,7 +652,14 @@ class FileManager(QWidget):
             path += '/'
             
         self.current_device_path = path
-        self.device_path_input.setText(self.current_device_path)
+        
+        # Add to history and save last path
+        self.config.add_to_history(self.current_device_path, "device")
+        self.config.set_last_path(self.current_device_path, "device")
+        
+        # Update combo box
+        self.populate_device_path_combo()
+        
         self.load_device_directory()
     
     def go_up_device_directory(self):
@@ -705,7 +782,7 @@ class FileManager(QWidget):
                 
                 self.progress_label.setText(f"Deleted {len(selected_files)} local file(s)")
                 # Refresh local view
-                current_path = self.local_path_input.text()
+                current_path = self.current_local_path
                 self.local_tree.setRootIndex(self.local_model.index(current_path))
                 
             except Exception as e:
@@ -789,8 +866,8 @@ class FileManager(QWidget):
     def refresh_files(self):
         """Refresh both file panels."""
         # Refresh local view
-        current_path = self.local_path_input.text()
-        self.local_tree.setRootIndex(self.local_model.index(current_path))
+        if hasattr(self, 'local_model') and self.local_model:
+            self.local_tree.setRootIndex(self.local_model.index(self.current_local_path))
         
         # Refresh device view
         self.load_device_directory()
@@ -872,6 +949,146 @@ class FileManager(QWidget):
         menu.addAction(new_folder_action)
         
         menu.exec(self.device_list.mapToGlobal(position))
+    
+    # Bookmark and History Management Methods
+    
+    def populate_local_path_combo(self):
+        """Populate local path combo with history and bookmarks."""
+        self.local_path_combo.clear()
+        
+        # Add current path
+        current_path = self.current_local_path
+        self.local_path_combo.addItem(current_path)
+        self.local_path_combo.setCurrentText(current_path)
+        
+        # Add separator
+        self.local_path_combo.insertSeparator(1)
+        
+        # Add bookmarks
+        bookmarks = self.config.get_bookmarks("local")
+        if bookmarks:
+            for bookmark in bookmarks:
+                self.local_path_combo.addItem(f"⭐ {bookmark['name']}", bookmark['path'])
+            self.local_path_combo.insertSeparator(self.local_path_combo.count())
+        
+        # Add history (excluding current path)
+        history = self.config.get_history("local")
+        for path in history:
+            if path != current_path:
+                self.local_path_combo.addItem(f"🕐 {Path(path).name} - {path}", path)
+    
+    def populate_device_path_combo(self):
+        """Populate device path combo with history and bookmarks."""
+        self.device_path_combo.clear()
+        
+        # Add current path
+        current_path = self.current_device_path
+        self.device_path_combo.addItem(current_path)
+        self.device_path_combo.setCurrentText(current_path)
+        
+        # Add separator
+        self.device_path_combo.insertSeparator(1)
+        
+        # Add bookmarks
+        bookmarks = self.config.get_bookmarks("device")
+        if bookmarks:
+            for bookmark in bookmarks:
+                self.device_path_combo.addItem(f"⭐ {bookmark['name']}", bookmark['path'])
+            self.device_path_combo.insertSeparator(self.device_path_combo.count())
+        
+        # Add history (excluding current path)
+        history = self.config.get_history("device")
+        for path in history:
+            if path != current_path:
+                path_name = Path(path).name or path.split('/')[-1] or path
+                self.device_path_combo.addItem(f"🕐 {path_name} - {path}", path)
+    
+    def on_local_path_changed(self, text):
+        """Handle local path combo text change."""
+        # Get the actual path from item data if available
+        index = self.local_path_combo.currentIndex()
+        if index >= 0:
+            item_data = self.local_path_combo.itemData(index)
+            if item_data:
+                text = item_data
+        
+        # Navigate to the path if it's different
+        if text and text != self.current_local_path:
+            self.navigate_to_local_path(text)
+    
+    def on_device_path_changed(self, text):
+        """Handle device path combo text change."""
+        # Get the actual path from item data if available
+        index = self.device_path_combo.currentIndex()
+        if index >= 0:
+            item_data = self.device_path_combo.itemData(index)
+            if item_data:
+                text = item_data
+        
+        # Navigate to the path if it's different
+        if text and text != self.current_device_path:
+            self.navigate_to_device_path(text)
+    
+    def navigate_to_local_path(self, path: str):
+        """Navigate to a specific local path."""
+        try:
+            path_obj = Path(path)
+            if path_obj.exists() and path_obj.is_dir():
+                self.current_local_path = str(path_obj)
+                
+                # Add to history
+                self.config.add_to_history(self.current_local_path, "local")
+                self.config.set_last_path(self.current_local_path, "local")
+                
+                # Update file system model
+                if self.local_model:
+                    self.local_tree.setRootIndex(self.local_model.index(self.current_local_path))
+                
+                # Refresh combo
+                self.populate_local_path_combo()
+                
+        except Exception as e:
+            self.logger.error(f"Error navigating to local path {path}: {e}")
+            QMessageBox.warning(self, "Navigation Error", f"Could not navigate to: {path}")
+    
+    def bookmark_local_path(self):
+        """Bookmark current local path."""
+        current_path = self.local_path_combo.currentText()
+        if not current_path:
+            return
+        
+        # Get bookmark name from user
+        name, ok = QInputDialog.getText(
+            self, 
+            "Add Bookmark", 
+            "Enter bookmark name:",
+            text=Path(current_path).name
+        )
+        
+        if ok and name:
+            self.config.add_bookmark(current_path, "local", name)
+            self.populate_local_path_combo()
+            QMessageBox.information(self, "Bookmark Added", f"Bookmarked: {name}")
+    
+    def bookmark_device_path(self):
+        """Bookmark current device path."""
+        current_path = self.device_path_combo.currentText()
+        if not current_path:
+            return
+        
+        # Get bookmark name from user
+        path_name = Path(current_path).name or current_path.split('/')[-1] or current_path
+        name, ok = QInputDialog.getText(
+            self, 
+            "Add Bookmark", 
+            "Enter bookmark name:",
+            text=path_name
+        )
+        
+        if ok and name:
+            self.config.add_bookmark(current_path, "device", name)
+            self.populate_device_path_combo()
+            QMessageBox.information(self, "Bookmark Added", f"Bookmarked: {name}")
     
     def closeEvent(self, event):
         """Handle widget close event."""
