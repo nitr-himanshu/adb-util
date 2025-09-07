@@ -5,6 +5,7 @@ A comprehensive Python-based desktop application for Android Debug Bridge (ADB) 
 """
 
 import sys
+import signal
 from pathlib import Path
 
 # Add src directory to path for imports
@@ -24,15 +25,56 @@ from pathlib import Path
 src_path = Path(__file__).parent / "src"
 sys.path.insert(0, str(src_path))
 
+# Global reference to main window for signal handler
+_main_window = None
+
+def signal_handler(signum, frame):
+    """Handle keyboard interrupt (Ctrl+C) gracefully."""
+    try:
+        from utils.logger import get_logger, log_shutdown
+        logger = get_logger(__name__)
+        logger.info(f"Received signal {signum}, shutting down gracefully...")
+        
+        # Try to cleanup main window if it exists
+        global _main_window
+        if _main_window:
+            try:
+                logger.info("Closing main window...")
+                _main_window.close()
+            except:
+                pass
+        
+        # Try to get the QApplication instance and quit properly
+        try:
+            from PyQt6.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app:
+                logger.info("Closing Qt application...")
+                app.quit()
+        except:
+            pass
+        
+        log_shutdown()
+    except:
+        print("\nShutting down gracefully...")
+    
+    # Exit cleanly
+    sys.exit(0)
+
 def main():
     """Main application entry point."""
     try:
+        # Set up signal handlers for graceful shutdown
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
         # Initialize logging first
         from utils.logger import get_logger, log_startup, log_shutdown, log_error
         logger = get_logger(__name__)
         
         log_startup()
         logger.info("Initializing ADB-UTIL application...")
+        logger.info("Signal handlers registered for graceful shutdown")
         
         from PyQt6.QtWidgets import QApplication
         from gui.main_window import MainWindow
@@ -45,8 +87,9 @@ def main():
         logger.info("Qt Application initialized")
         
         # Create and show main window
-        window = MainWindow()
-        window.show()
+        global _main_window
+        _main_window = MainWindow()
+        _main_window.show()
         
         logger.info("Main window created and displayed")
         
