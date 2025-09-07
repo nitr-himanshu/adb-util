@@ -4,17 +4,132 @@ File Manager UI
 Dual-pane file browser with drag & drop support for file operations.
 """
 
+import os
+import asyncio
+from pathlib import Path
+from typing import List, Optional
+from datetime import datetime
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTreeView, QLabel, QPushButton, QProgressBar,
     QLineEdit, QTextEdit, QTabWidget, QFrame,
     QToolBar, QFileDialog, QMessageBox, QListWidget,
-    QComboBox, QSpinBox
+    QComboBox, QSpinBox, QInputDialog, QListWidgetItem,
+    QAbstractItemView, QMenu, QApplication
 )
-from PyQt6.QtCore import Qt, QDir
-from PyQt6.QtGui import QStandardItemModel, QStandardItem, QFont, QFileSystemModel
+from PyQt6.QtCore import Qt, QDir, QThread, pyqtSignal, QTimer
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QFont, QFileSystemModel, QAction
 
+from adb.file_operations import FileOperations, FileInfo
 from utils.logger import get_logger, log_file_operation
+
+
+class FileTransferWorker(QThread):
+    """Worker thread for file transfer operations."""
+    
+    progress_updated = pyqtSignal(int)
+    status_updated = pyqtSignal(str)
+    transfer_completed = pyqtSignal(bool, str)
+    
+    def __init__(self, operation: str, file_ops: FileOperations, 
+                 source: str, destination: str):
+        super().__init__()
+        self.operation = operation
+        self.file_ops = file_ops
+        self.source = source
+        self.destination = destination
+        self.logger = get_logger(__name__)
+    
+    def run(self):
+        """Execute the file transfer operation."""
+        try:
+            # Create event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                if self.operation == "push":
+                    result = loop.run_until_complete(
+                        self.file_ops.push_file(Path(self.source), self.destination)
+                    )
+                elif self.operation == "pull":
+                    result = loop.run_until_complete(
+                        self.file_ops.pull_file(self.source, Path(self.destination))
+                    )
+                elif self.operation == "delete":
+                    result = loop.run_until_complete(
+                        self.file_ops.delete_file(self.source)
+                    )
+                elif self.operation == "delete_dir":
+                    result = loop.run_until_complete(
+                        self.file_ops.delete_directory(self.source)
+                    )
+                elif self.operation == "create_dir":
+                    result = loop.run_until_complete(
+                        self.file_ops.create_directory(self.source)
+                    )
+                else:
+                    result = False
+                
+                message = f"{self.operation.title()} completed successfully" if result else f"{self.operation.title()} failed"
+                self.transfer_completed.emit(result, message)
+                
+            finally:
+                loop.close()
+                
+        except Exception as e:
+            self.logger.error(f"Error in file transfer worker: {e}")
+            self.transfer_completed.emit(False, f"Error: {str(e)}")
+
+
+class DirectoryListWorker(QThread):
+    """Worker thread for directory listing operations."""
+    
+    listing_completed = pyqtSignal(list)
+    listing_failed = pyqtSignal(str)
+    
+    def __init__(self, file_ops: FileOperations, path: str):
+        super().__init__()
+        self.file_ops = file_ops
+        self.path = path
+        self.logger = get_logger(__name__)
+    
+    def run(self):
+        """Execute the directory listing operation."""
+        try:
+            # Create event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                # First test device connection
+                self.logger.info(f"Testing device connection before listing {self.path}")
+                connection_ok = loop.run_until_complete(
+                    self.file_ops.test_device_connection()
+                )
+                
+                if not connection_ok:
+                    self.listing_failed.emit(f"Cannot connect to device {self.file_ops.device_id}")
+                    return
+                
+                # Now try to list the directory
+                self.logger.info(f"Listing directory {self.path}")
+                files = loop.run_until_complete(
+                    self.file_ops.list_directory(self.path)
+                )
+                
+                self.logger.info(f"Directory listing returned {len(files)} files")
+                self.listing_completed.emit(files)
+                
+            finally:
+                loop.close()
+                
+        except Exception as e:
+            self.logger.error(f"Error in directory listing worker: {e}")
+            import traceback
+            traceback.print_exc()
+            self.listing_failed.emit(f"Error listing directory: {str(e)}")
 
 
 class FileManager(QWidget):
@@ -26,9 +141,14 @@ class FileManager(QWidget):
         self.logger = get_logger(__name__)
         self.local_model = None
         self.device_model = None
+        self.current_device_path = "/sdcard/"
+        self.file_ops = FileOperations(device_id)
+        self.transfer_worker = None
+        self.listing_worker = None
         
         self.logger.info(f"Initializing file manager for device: {device_id}")
         self.init_ui()
+        self.load_device_directory()
         self.logger.info("File manager initialization complete")
     
     def init_ui(self):
@@ -69,7 +189,7 @@ class FileManager(QWidget):
         toolbar_layout = QHBoxLayout(toolbar_frame)
         
         # Device info
-        device_label = QLabel(f"Device: {self.device_id}")
+        device_label = QLabel(f"📱 Device: {self.device_id}")
         device_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         toolbar_layout.addWidget(device_label)
         
@@ -83,6 +203,21 @@ class FileManager(QWidget):
         new_folder_btn = QPushButton("📁 New Folder")
         new_folder_btn.clicked.connect(self.create_new_folder)
         toolbar_layout.addWidget(new_folder_btn)
+        
+        # Quick navigation buttons
+        home_btn = QPushButton("🏠 Home")
+        home_btn.clicked.connect(lambda: self.navigate_to_device_path("/sdcard/"))
+        toolbar_layout.addWidget(home_btn)
+        
+        root_btn = QPushButton("📂 Root")
+        root_btn.clicked.connect(lambda: self.navigate_to_device_path("/"))
+        toolbar_layout.addWidget(root_btn)
+        
+        # Test connection button
+        test_btn = QPushButton("🔗 Test")
+        test_btn.clicked.connect(self.test_device_connection)
+        test_btn.setToolTip("Test device connection")
+        toolbar_layout.addWidget(test_btn)
         
         return toolbar_frame
     
@@ -100,7 +235,8 @@ class FileManager(QWidget):
         
         # Path input
         self.local_path_input = QLineEdit()
-        self.local_path_input.setText(QDir.homePath())
+        self.local_path_input.setText(str(Path.home()))
+        self.local_path_input.returnPressed.connect(self.navigate_local_folder)
         header_layout.addWidget(self.local_path_input)
         
         browse_btn = QPushButton("Browse")
@@ -112,14 +248,21 @@ class FileManager(QWidget):
         # File tree view
         self.local_tree = QTreeView()
         self.local_model = QFileSystemModel()
-        self.local_model.setRootPath(QDir.homePath())
+        self.local_model.setRootPath(str(Path.home()))
         self.local_tree.setModel(self.local_model)
-        self.local_tree.setRootIndex(self.local_model.index(QDir.homePath()))
+        self.local_tree.setRootIndex(self.local_model.index(str(Path.home())))
         
-        # Hide unnecessary columns
-        self.local_tree.hideColumn(1)  # Size
+        # Enable multi-selection
+        self.local_tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        
+        # Hide unnecessary columns initially
+        self.local_tree.hideColumn(1)  # Size (we'll show it later)
         self.local_tree.hideColumn(2)  # Type
         self.local_tree.hideColumn(3)  # Date Modified
+        
+        # Context menu
+        self.local_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.local_tree.customContextMenuRequested.connect(self.show_local_context_menu)
         
         layout.addWidget(self.local_tree)
         
@@ -127,7 +270,7 @@ class FileManager(QWidget):
         local_actions = QHBoxLayout()
         
         upload_btn = QPushButton("⬆️ Upload")
-        upload_btn.clicked.connect(self.upload_file)
+        upload_btn.clicked.connect(self.upload_selected_files)
         local_actions.addWidget(upload_btn)
         
         delete_local_btn = QPushButton("🗑️ Delete")
@@ -152,30 +295,39 @@ class FileManager(QWidget):
         
         # Path input
         self.device_path_input = QLineEdit()
-        self.device_path_input.setText("/sdcard/")
+        self.device_path_input.setText(self.current_device_path)
+        self.device_path_input.returnPressed.connect(self.navigate_device_folder)
         header_layout.addWidget(self.device_path_input)
         
         navigate_btn = QPushButton("Go")
         navigate_btn.clicked.connect(self.navigate_device_folder)
         header_layout.addWidget(navigate_btn)
         
+        # Up button
+        up_btn = QPushButton("⬆️ Up")
+        up_btn.clicked.connect(self.go_up_device_directory)
+        header_layout.addWidget(up_btn)
+        
         layout.addLayout(header_layout)
         
         # Device file list
         self.device_list = QListWidget()
-        self.device_list.addItem("📁 Documents")
-        self.device_list.addItem("📁 Pictures")
-        self.device_list.addItem("📁 Music")
-        self.device_list.addItem("📁 Videos")
-        self.device_list.addItem("📄 test.txt")
-        self.device_list.addItem("📄 config.json")
+        self.device_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        
+        # Enable double-click to navigate
+        self.device_list.itemDoubleClicked.connect(self.device_item_double_clicked)
+        
+        # Context menu
+        self.device_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.device_list.customContextMenuRequested.connect(self.show_device_context_menu)
+        
         layout.addWidget(self.device_list)
         
         # Device file actions
         device_actions = QHBoxLayout()
         
         download_btn = QPushButton("⬇️ Download")
-        download_btn.clicked.connect(self.download_file)
+        download_btn.clicked.connect(self.download_selected_files)
         device_actions.addWidget(download_btn)
         
         delete_device_btn = QPushButton("🗑️ Delete")
@@ -198,6 +350,7 @@ class FileManager(QWidget):
         push_btn = QPushButton("➡️\nPush")
         push_btn.setMinimumHeight(60)
         push_btn.clicked.connect(self.push_file)
+        push_btn.setToolTip("Push selected local files to device")
         layout.addWidget(push_btn)
         
         layout.addSpacing(20)
@@ -205,6 +358,7 @@ class FileManager(QWidget):
         pull_btn = QPushButton("⬅️\nPull")
         pull_btn.setMinimumHeight(60)
         pull_btn.clicked.connect(self.pull_file)
+        pull_btn.setToolTip("Pull selected device files to local")
         layout.addWidget(pull_btn)
         
         layout.addSpacing(20)
@@ -212,6 +366,7 @@ class FileManager(QWidget):
         sync_btn = QPushButton("🔄\nSync")
         sync_btn.setMinimumHeight(60)
         sync_btn.clicked.connect(self.sync_folders)
+        sync_btn.setToolTip("Sync folders between local and device")
         layout.addWidget(sync_btn)
         
         layout.addStretch()
@@ -233,7 +388,7 @@ class FileManager(QWidget):
         
         progress_layout.addStretch()
         
-        self.speed_label = QLabel("0 KB/s")
+        self.speed_label = QLabel("")
         progress_layout.addWidget(self.speed_label)
         
         layout.addLayout(progress_layout)
@@ -245,87 +400,425 @@ class FileManager(QWidget):
         
         return panel
     
+    def load_device_directory(self):
+        """Load the current device directory."""
+        if self.listing_worker and self.listing_worker.isRunning():
+            return
+        
+        self.progress_label.setText(f"Loading {self.current_device_path}...")
+        self.device_list.clear()
+        
+        # Add a loading indicator
+        loading_item = QListWidgetItem("⏳ Loading...")
+        self.device_list.addItem(loading_item)
+        
+        # Start directory listing in background thread
+        self.listing_worker = DirectoryListWorker(self.file_ops, self.current_device_path)
+        self.listing_worker.listing_completed.connect(self.on_device_listing_completed)
+        self.listing_worker.listing_failed.connect(self.on_device_listing_failed)
+        self.listing_worker.start()
+    
+    def on_device_listing_completed(self, files: List[FileInfo]):
+        """Handle completed device directory listing."""
+        self.device_list.clear()
+        
+        self.logger.info(f"Received {len(files)} files from directory listing")
+        
+        if not files:
+            # Add a message item if no files found
+            item = QListWidgetItem("📂 No files found or empty directory")
+            self.device_list.addItem(item)
+            self.progress_label.setText(f"No files found in {self.current_device_path}")
+            return
+        
+        # Sort files: directories first, then files
+        files.sort(key=lambda f: (not f.is_directory, f.name.lower()))
+        
+        for file_info in files:
+            self.logger.debug(f"Adding file to list: {file_info}")
+            
+            # Ensure we have a valid name
+            if not file_info.name or file_info.name.strip() == "":
+                self.logger.warning(f"Skipping file with empty name: {file_info}")
+                continue
+            
+            icon = "📁" if file_info.is_directory else "📄"
+            size_text = ""
+            if not file_info.is_directory and file_info.size > 0:
+                size_text = f" ({self.format_file_size(file_info.size)})"
+            
+            item_text = f"{icon} {file_info.name}{size_text}"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.ItemDataRole.UserRole, file_info)
+            self.device_list.addItem(item)
+        
+        actual_count = self.device_list.count()
+        self.progress_label.setText(f"Loaded {actual_count} items from {self.current_device_path}")
+        self.logger.info(f"Successfully added {actual_count} items to device list")
+    
+    def on_device_listing_failed(self, error_message: str):
+        """Handle failed device directory listing."""
+        self.progress_label.setText(f"Failed to load directory: {error_message}")
+        QMessageBox.warning(self, "Directory Error", f"Failed to load directory:\n{error_message}")
+    
+    def format_file_size(self, size_bytes: int) -> str:
+        """Format file size in human readable format."""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} PB"
+    
     def browse_local_folder(self):
         """Browse for local folder."""
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
         if folder:
             self.local_path_input.setText(folder)
-            self.local_tree.setRootIndex(self.local_model.index(folder))
+            self.navigate_local_folder()
+    
+    def navigate_local_folder(self):
+        """Navigate to the folder specified in local path input."""
+        path = self.local_path_input.text()
+        if os.path.exists(path):
+            self.local_tree.setRootIndex(self.local_model.index(path))
+            self.local_model.setRootPath(path)
+        else:
+            QMessageBox.warning(self, "Invalid Path", f"Path does not exist: {path}")
     
     def navigate_device_folder(self):
         """Navigate to device folder."""
-        path = self.device_path_input.text()
-        # TODO: Implement device folder navigation
-        self.progress_label.setText(f"Navigating to {path}")
+        path = self.device_path_input.text().strip()
+        if path:
+            self.navigate_to_device_path(path)
     
-    def upload_file(self):
-        """Upload selected local file to device."""
-        # TODO: Implement file upload logic
-        self.show_progress("Uploading file...")
+    def navigate_to_device_path(self, path: str):
+        """Navigate to specific device path."""
+        # Normalize path for Unix-style Android paths
+        path = path.strip()
+        if not path:
+            path = '/'
+        
+        # Ensure path starts with /
+        if not path.startswith('/'):
+            path = '/' + path
+            
+        # Remove double slashes but preserve root /
+        while '//' in path:
+            path = path.replace('//', '/')
+            
+        # Store normalized path (always ends with / for directories)
+        if path != '/' and not path.endswith('/'):
+            path += '/'
+            
+        self.current_device_path = path
+        self.device_path_input.setText(self.current_device_path)
+        self.load_device_directory()
     
-    def download_file(self):
-        """Download selected device file to local."""
-        # TODO: Implement file download logic
-        self.show_progress("Downloading file...")
+    def go_up_device_directory(self):
+        """Go up one level in device directory."""
+        if self.current_device_path != "/":
+            # Handle Unix-style path navigation manually
+            current = self.current_device_path.rstrip('/')
+            
+            # If we're at root, stay at root
+            if current == '' or current == '/':
+                parent_path = '/'
+            else:
+                # Find last slash and get parent
+                last_slash = current.rfind('/')
+                if last_slash <= 0:  # If slash is at position 0 or not found
+                    parent_path = '/'
+                else:
+                    parent_path = current[:last_slash] + '/'
+                    
+            self.navigate_to_device_path(parent_path)
+    
+    def device_item_double_clicked(self, item: QListWidgetItem):
+        """Handle double-click on device item."""
+        file_info = item.data(Qt.ItemDataRole.UserRole)
+        if file_info and file_info.is_directory:
+            self.navigate_to_device_path(file_info.path)
+    
+    def get_selected_local_files(self) -> List[str]:
+        """Get list of selected local file paths."""
+        selected_indexes = self.local_tree.selectedIndexes()
+        file_paths = []
+        
+        for index in selected_indexes:
+            if index.column() == 0:  # Only process the first column
+                file_path = self.local_model.filePath(index)
+                if file_path not in file_paths:
+                    file_paths.append(file_path)
+        
+        return file_paths
+    
+    def get_selected_device_files(self) -> List[FileInfo]:
+        """Get list of selected device files."""
+        selected_items = self.device_list.selectedItems()
+        files = []
+        
+        for item in selected_items:
+            file_info = item.data(Qt.ItemDataRole.UserRole)
+            if file_info:
+                files.append(file_info)
+        
+        return files
+    
+    def upload_selected_files(self):
+        """Upload selected local files to device."""
+        selected_files = self.get_selected_local_files()
+        if not selected_files:
+            QMessageBox.information(self, "No Selection", "Please select files to upload.")
+            return
+        
+        for file_path in selected_files:
+            local_path = Path(file_path)
+            if local_path.is_file():
+                device_path = f"{self.current_device_path}{local_path.name}"
+                self.start_file_transfer("push", str(local_path), device_path)
+                break  # For now, upload one file at a time
+    
+    def download_selected_files(self):
+        """Download selected device files to local."""
+        selected_files = self.get_selected_device_files()
+        if not selected_files:
+            QMessageBox.information(self, "No Selection", "Please select files to download.")
+            return
+        
+        # Get download directory
+        download_dir = QFileDialog.getExistingDirectory(self, "Select Download Directory")
+        if not download_dir:
+            return
+        
+        for file_info in selected_files:
+            if not file_info.is_directory:
+                local_path = Path(download_dir) / file_info.name
+                self.start_file_transfer("pull", file_info.path, str(local_path))
+                break  # For now, download one file at a time
     
     def push_file(self):
         """Push file from local to device."""
-        self.logger.info(f"Starting file push operation to device {self.device_id}")
-        log_file_operation("push", "local_file", f"device:{self.device_id}", "started")
-        # TODO: Implement file push operation
-        self.show_progress("Pushing file to device...")
+        self.upload_selected_files()
     
     def pull_file(self):
         """Pull file from device to local."""
-        self.logger.info(f"Starting file pull operation from device {self.device_id}")
-        log_file_operation("pull", f"device:{self.device_id}", "local_file", "started")
-        # TODO: Implement file pull operation
-        self.show_progress("Pulling file from device...")
+        self.download_selected_files()
     
     def sync_folders(self):
         """Sync folders between local and device."""
-        self.logger.info(f"Starting folder sync operation with device {self.device_id}")
-        log_file_operation("sync", "local_folder", f"device:{self.device_id}", "started")
-        # TODO: Implement folder sync
-        self.show_progress("Syncing folders...")
+        QMessageBox.information(self, "Sync Folders", "Folder sync feature coming soon!")
     
     def delete_local_file(self):
         """Delete selected local file."""
+        selected_files = self.get_selected_local_files()
+        if not selected_files:
+            QMessageBox.information(self, "No Selection", "Please select files to delete.")
+            return
+        
         reply = QMessageBox.question(
             self, 
-            "Delete File", 
-            "Are you sure you want to delete the selected file?",
+            "Delete Files", 
+            f"Are you sure you want to delete {len(selected_files)} selected file(s)?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
+        
         if reply == QMessageBox.StandardButton.Yes:
-            # TODO: Implement local file deletion
-            self.progress_label.setText("Local file deleted")
+            try:
+                for file_path in selected_files:
+                    path = Path(file_path)
+                    if path.is_file():
+                        path.unlink()
+                    elif path.is_dir():
+                        import shutil
+                        shutil.rmtree(path)
+                
+                self.progress_label.setText(f"Deleted {len(selected_files)} local file(s)")
+                # Refresh local view
+                current_path = self.local_path_input.text()
+                self.local_tree.setRootIndex(self.local_model.index(current_path))
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Delete Error", f"Failed to delete files: {str(e)}")
     
     def delete_device_file(self):
         """Delete selected device file."""
+        selected_files = self.get_selected_device_files()
+        if not selected_files:
+            QMessageBox.information(self, "No Selection", "Please select files to delete.")
+            return
+        
         reply = QMessageBox.question(
             self, 
-            "Delete File", 
-            "Are you sure you want to delete the selected file from device?",
+            "Delete Files", 
+            f"Are you sure you want to delete {len(selected_files)} selected file(s) from device?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
+        
         if reply == QMessageBox.StandardButton.Yes:
-            # TODO: Implement device file deletion
-            self.progress_label.setText("Device file deleted")
+            for file_info in selected_files:
+                operation = "delete_dir" if file_info.is_directory else "delete"
+                self.start_file_transfer(operation, file_info.path, "")
+                break  # Delete one at a time for now
     
     def create_new_folder(self):
         """Create new folder on device."""
-        # TODO: Implement new folder creation
-        self.progress_label.setText("Creating new folder...")
+        folder_name, ok = QInputDialog.getText(
+            self, 
+            "New Folder", 
+            "Enter folder name:"
+        )
+        
+        if ok and folder_name.strip():
+            folder_path = f"{self.current_device_path}{folder_name.strip()}"
+            self.start_file_transfer("create_dir", folder_path, "")
+    
+    def test_device_connection(self):
+        """Test device connection manually."""
+        self.progress_label.setText("Testing device connection...")
+        
+        # Create a simple worker to test connection
+        class ConnectionTestWorker(QThread):
+            test_completed = pyqtSignal(bool, str)
+            
+            def __init__(self, file_ops):
+                super().__init__()
+                self.file_ops = file_ops
+            
+            def run(self):
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    try:
+                        result = loop.run_until_complete(
+                            self.file_ops.test_device_connection()
+                        )
+                        
+                        if result:
+                            self.test_completed.emit(True, "Device connection successful")
+                        else:
+                            self.test_completed.emit(False, "Device connection failed")
+                    finally:
+                        loop.close()
+                        
+                except Exception as e:
+                    self.test_completed.emit(False, f"Connection test error: {str(e)}")
+        
+        def on_test_completed(success, message):
+            self.progress_label.setText(message)
+            if success:
+                QMessageBox.information(self, "Connection Test", message)
+            else:
+                QMessageBox.warning(self, "Connection Test", message)
+        
+        self.test_worker = ConnectionTestWorker(self.file_ops)
+        self.test_worker.test_completed.connect(on_test_completed)
+        self.test_worker.start()
     
     def refresh_files(self):
         """Refresh both file panels."""
-        # TODO: Implement file refresh
-        self.progress_label.setText("Refreshing files...")
+        # Refresh local view
+        current_path = self.local_path_input.text()
+        self.local_tree.setRootIndex(self.local_model.index(current_path))
+        
+        # Refresh device view
+        self.load_device_directory()
     
-    def show_progress(self, message):
+    def start_file_transfer(self, operation: str, source: str, destination: str):
+        """Start a file transfer operation in background thread."""
+        if self.transfer_worker and self.transfer_worker.isRunning():
+            QMessageBox.warning(self, "Transfer in Progress", "Please wait for current transfer to complete.")
+            return
+        
+        self.show_progress(f"Starting {operation}...")
+        
+        # Start transfer in background thread
+        self.transfer_worker = FileTransferWorker(operation, self.file_ops, source, destination)
+        self.transfer_worker.progress_updated.connect(self.update_progress)
+        self.transfer_worker.status_updated.connect(self.update_status)
+        self.transfer_worker.transfer_completed.connect(self.on_transfer_completed)
+        self.transfer_worker.start()
+    
+    def on_transfer_completed(self, success: bool, message: str):
+        """Handle completed file transfer."""
+        self.progress_bar.setVisible(False)
+        self.progress_label.setText(message)
+        
+        if success:
+            # Refresh device view after successful operations
+            self.load_device_directory()
+        
+        # Log the operation
+        operation = self.transfer_worker.operation if self.transfer_worker else "unknown"
+        status = "completed" if success else "failed"
+        log_file_operation(operation, self.transfer_worker.source if self.transfer_worker else "", 
+                          self.transfer_worker.destination if self.transfer_worker else "", status)
+    
+    def update_progress(self, value: int):
+        """Update progress bar."""
+        self.progress_bar.setValue(value)
+    
+    def update_status(self, message: str):
+        """Update status message."""
+        self.progress_label.setText(message)
+    
+    def show_progress(self, message: str):
         """Show progress for operations."""
         self.progress_label.setText(message)
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
-        # TODO: Implement actual progress tracking
+    
+    def show_local_context_menu(self, position):
+        """Show context menu for local files."""
+        menu = QMenu(self)
+        
+        upload_action = QAction("⬆️ Upload to Device", self)
+        upload_action.triggered.connect(self.upload_selected_files)
+        menu.addAction(upload_action)
+        
+        delete_action = QAction("🗑️ Delete", self)
+        delete_action.triggered.connect(self.delete_local_file)
+        menu.addAction(delete_action)
+        
+        menu.exec(self.local_tree.mapToGlobal(position))
+    
+    def show_device_context_menu(self, position):
+        """Show context menu for device files."""
+        menu = QMenu(self)
+        
+        download_action = QAction("⬇️ Download to Local", self)
+        download_action.triggered.connect(self.download_selected_files)
+        menu.addAction(download_action)
+        
+        delete_action = QAction("🗑️ Delete", self)
+        delete_action.triggered.connect(self.delete_device_file)
+        menu.addAction(delete_action)
+        
+        menu.addSeparator()
+        
+        new_folder_action = QAction("📁 New Folder", self)
+        new_folder_action.triggered.connect(self.create_new_folder)
+        menu.addAction(new_folder_action)
+        
+        menu.exec(self.device_list.mapToGlobal(position))
+    
+    def closeEvent(self, event):
+        """Handle widget close event."""
+        self.cleanup()
+        super().closeEvent(event)
+    
+    def cleanup(self):
+        """Clean up resources."""
+        try:
+            if self.transfer_worker and self.transfer_worker.isRunning():
+                self.transfer_worker.terminate()
+                self.transfer_worker.wait(1000)
+            
+            if self.listing_worker and self.listing_worker.isRunning():
+                self.listing_worker.terminate()
+                self.listing_worker.wait(1000)
+                
+            self.logger.info("File manager cleanup completed")
+            
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
