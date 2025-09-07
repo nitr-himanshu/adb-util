@@ -261,6 +261,72 @@ class ThemeManager(QObject):
                     background-color: #ffffff;
                     color: #000000;
                 }
+                
+                QProgressBar {
+                    background-color: #f0f0f0;
+                    border: 1px solid #c0c0c0;
+                    border-radius: 4px;
+                    text-align: center;
+                    color: #000000;
+                }
+                
+                QProgressBar::chunk {
+                    background-color: #007acc;
+                    border-radius: 2px;
+                }
+                
+                QSplitter::handle {
+                    background-color: #c0c0c0;
+                }
+                
+                QSplitter::handle:horizontal {
+                    width: 3px;
+                }
+                
+                QSplitter::handle:vertical {
+                    height: 3px;
+                }
+                
+                /* Tab widget specific improvements */
+                QTabWidget::tab-bar {
+                    alignment: left;
+                }
+                
+                QTabBar::tab:!selected {
+                    background-color: #e0e0e0;
+                    color: #666666;
+                }
+                
+                QTabBar::tab:!selected:hover {
+                    background-color: #d0d0d0;
+                    color: #000000;
+                }
+                
+                /* Better scrollbar styling */
+                QScrollBar:horizontal {
+                    background-color: #f0f0f0;
+                    height: 12px;
+                    border-radius: 6px;
+                }
+                
+                QScrollBar::handle:horizontal {
+                    background-color: #c0c0c0;
+                    border-radius: 6px;
+                    min-width: 20px;
+                }
+                
+                QScrollBar::handle:horizontal:hover {
+                    background-color: #a0a0a0;
+                }
+                
+                QScrollBar::add-line, QScrollBar::sub-line {
+                    background: none;
+                    border: none;
+                }
+                
+                QScrollBar::add-page, QScrollBar::sub-page {
+                    background: none;
+                }
             """,
             "colors": {
                 "primary": "#007acc",
@@ -593,6 +659,72 @@ class ThemeManager(QObject):
                 QDialog {
                     background-color: #2b2b2b;
                     color: #ffffff;
+                }
+                
+                QProgressBar {
+                    background-color: #363636;
+                    border: 1px solid #555555;
+                    border-radius: 4px;
+                    text-align: center;
+                    color: #ffffff;
+                }
+                
+                QProgressBar::chunk {
+                    background-color: #007acc;
+                    border-radius: 2px;
+                }
+                
+                QSplitter::handle {
+                    background-color: #555555;
+                }
+                
+                QSplitter::handle:horizontal {
+                    width: 3px;
+                }
+                
+                QSplitter::handle:vertical {
+                    height: 3px;
+                }
+                
+                /* Tab widget specific improvements */
+                QTabWidget::tab-bar {
+                    alignment: left;
+                }
+                
+                QTabBar::tab:!selected {
+                    background-color: #363636;
+                    color: #bbbbbb;
+                }
+                
+                QTabBar::tab:!selected:hover {
+                    background-color: #484848;
+                    color: #ffffff;
+                }
+                
+                /* Better scrollbar styling */
+                QScrollBar:horizontal {
+                    background-color: #363636;
+                    height: 12px;
+                    border-radius: 6px;
+                }
+                
+                QScrollBar::handle:horizontal {
+                    background-color: #555555;
+                    border-radius: 6px;
+                    min-width: 20px;
+                }
+                
+                QScrollBar::handle:horizontal:hover {
+                    background-color: #777777;
+                }
+                
+                QScrollBar::add-line, QScrollBar::sub-line {
+                    background: none;
+                    border: none;
+                }
+                
+                QScrollBar::add-page, QScrollBar::sub-page {
+                    background: none;
                 }
             """,
             "colors": {

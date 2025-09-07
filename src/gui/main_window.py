@@ -576,11 +576,19 @@ class MainWindow(QMainWindow):
                 # Update button style
                 self.update_theme_button_style()
             
-            # Refresh theme for all open file manager tabs
-            for i in range(self.tab_widget.count()):
-                widget = self.tab_widget.widget(i)
-                if hasattr(widget, 'refresh_theme'):
-                    widget.refresh_theme()
+            # Refresh theme for all open tabs with a small delay to ensure proper application
+            def refresh_all_tabs():
+                try:
+                    for i in range(self.tab_widget.count()):
+                        widget = self.tab_widget.widget(i)
+                        if hasattr(widget, 'refresh_theme'):
+                            # Add a small delay for each widget to prevent race conditions
+                            QTimer.singleShot(50 * i, widget.refresh_theme)
+                except Exception as e:
+                    self.logger.error(f"Error refreshing tab themes: {e}")
+            
+            # Schedule the refresh after a small delay to ensure the theme is fully applied
+            QTimer.singleShot(100, refresh_all_tabs)
             
             # Update status bar message
             if hasattr(self, 'status_label'):

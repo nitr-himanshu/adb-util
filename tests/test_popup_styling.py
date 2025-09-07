@@ -4,9 +4,12 @@ Test script to verify popup styling in both light and dark themes.
 """
 
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
 from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QMessageBox
 from PyQt6.QtCore import Qt
-from src.utils.theme_manager import theme_manager
+from utils.theme_manager import theme_manager
 
 class TestWindow(QMainWindow):
     def __init__(self):
