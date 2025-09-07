@@ -362,13 +362,24 @@ class Logging(QWidget):
         highlight_input_layout = QHBoxLayout()
         self.highlight_input = QLineEdit()
         self.highlight_input.setPlaceholderText("Keywords to highlight...")
+        self.highlight_input.returnPressed.connect(self.add_highlight_keyword)  # Add Enter key support
         highlight_input_layout.addWidget(self.highlight_input)
         
         add_highlight_btn = QPushButton("Add")
         add_highlight_btn.clicked.connect(self.add_highlight_keyword)
         highlight_input_layout.addWidget(add_highlight_btn)
         
+        clear_highlight_btn = QPushButton("Clear All")
+        clear_highlight_btn.clicked.connect(self.clear_highlight_keywords)
+        highlight_input_layout.addWidget(clear_highlight_btn)
+        
         highlight_layout.addLayout(highlight_input_layout)
+        
+        # Add label to show current keywords
+        self.keywords_label = QLabel("Keywords: None")
+        self.keywords_label.setStyleSheet("font-size: 10px; color: #888888;")
+        self.keywords_label.setWordWrap(True)
+        highlight_layout.addWidget(self.keywords_label)
         
         scroll_layout.addWidget(highlight_group)
         
@@ -683,12 +694,20 @@ class Logging(QWidget):
         cursor = self.log_display.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
         
-        # Set color based on log level
-        format = QTextCharFormat()
-        format.setForeground(QColor(colors.get(entry.level, "#ffffff")))
-        cursor.setCharFormat(format)
+        # Check if we have highlight keywords
+        highlight_keywords = getattr(self, 'highlight_keywords', [])
         
-        cursor.insertText(log_line + "\n")
+        if highlight_keywords:
+            # Apply highlighting by inserting text with different formats
+            self._insert_highlighted_text(cursor, log_line, entry.level, colors, highlight_keywords)
+        else:
+            # Set color based on log level
+            format = QTextCharFormat()
+            format.setForeground(QColor(colors.get(entry.level, "#ffffff")))
+            cursor.setCharFormat(format)
+            cursor.insertText(log_line)
+        
+        cursor.insertText("\n")
         
         # Auto-scroll if enabled
         if self.auto_scroll_checkbox.isChecked():
@@ -798,14 +817,46 @@ class Logging(QWidget):
         """Add a keyword for highlighting."""
         keyword = self.highlight_input.text().strip()
         if keyword:
-            # Store highlight keywords for future implementation
+            # Initialize highlight keywords list if it doesn't exist
             if not hasattr(self, 'highlight_keywords'):
                 self.highlight_keywords = []
+            
+            # Check for duplicates (case-insensitive)
+            if any(k.lower() == keyword.lower() for k in self.highlight_keywords):
+                QMessageBox.information(
+                    self,
+                    "Duplicate Keyword",
+                    f"Keyword '{keyword}' is already in the highlight list."
+                )
+                return
+            
+            # Add the keyword
             self.highlight_keywords.append(keyword)
             self.highlight_input.clear()
             self.logger.info(f"Highlight keyword added: {keyword}")
+            
+            # Update keyword display if it exists
+            self._update_keyword_display()
+            
             # Refresh display to apply highlighting
             self.refresh_display()
+    
+    def _update_keyword_display(self):
+        """Update the display of current highlight keywords."""
+        if hasattr(self, 'keywords_label') and hasattr(self, 'highlight_keywords'):
+            if self.highlight_keywords:
+                keywords_text = ", ".join(self.highlight_keywords)
+                self.keywords_label.setText(f"Keywords: {keywords_text}")
+            else:
+                self.keywords_label.setText("Keywords: None")
+    
+    def clear_highlight_keywords(self):
+        """Clear all highlight keywords."""
+        if hasattr(self, 'highlight_keywords'):
+            self.highlight_keywords.clear()
+            self._update_keyword_display()
+            self.refresh_display()
+            self.logger.info("All highlight keywords cleared")
     
     def export_logs(self):
         """Export logs with current filters applied."""
@@ -858,3 +909,50 @@ class Logging(QWidget):
             
         except Exception as e:
             self.logger.error(f"Error during cleanup: {e}")
+    
+    def _insert_highlighted_text(self, cursor, text, log_level, colors, highlight_keywords):
+        """Insert text with keyword highlighting."""
+        import re
+        
+        # Create base format for log level
+        base_format = QTextCharFormat()
+        base_format.setForeground(QColor(colors.get(log_level, "#ffffff")))
+        
+        # Create highlight format
+        highlight_format = QTextCharFormat()
+        highlight_format.setForeground(QColor("#000000"))  # Black text
+        highlight_format.setBackground(QColor("#ffff00"))  # Yellow background
+        
+        # Find all keyword matches
+        remaining_text = text
+        while remaining_text:
+            # Find the earliest keyword match
+            earliest_match = None
+            earliest_pos = len(remaining_text)
+            earliest_keyword = None
+            
+            for keyword in highlight_keywords:
+                # Case-insensitive search
+                match = re.search(re.escape(keyword), remaining_text, re.IGNORECASE)
+                if match and match.start() < earliest_pos:
+                    earliest_pos = match.start()
+                    earliest_match = match
+                    earliest_keyword = keyword
+            
+            if earliest_match:
+                # Insert text before the match with normal formatting
+                if earliest_pos > 0:
+                    cursor.setCharFormat(base_format)
+                    cursor.insertText(remaining_text[:earliest_pos])
+                
+                # Insert the highlighted keyword
+                cursor.setCharFormat(highlight_format)
+                cursor.insertText(remaining_text[earliest_match.start():earliest_match.end()])
+                
+                # Update remaining text
+                remaining_text = remaining_text[earliest_match.end():]
+            else:
+                # No more matches, insert remaining text with normal formatting
+                cursor.setCharFormat(base_format)
+                cursor.insertText(remaining_text)
+                break
