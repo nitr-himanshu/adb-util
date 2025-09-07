@@ -21,8 +21,10 @@ A comprehensive Python-based desktop application for Android Debug Bridge (ADB) 
 - **Dual-pane file browser** (local ↔ device)
 - **Drag & drop** file transfers with progress indicators
 - **File operations**: Push, Pull, Delete, Move, Copy
-- **Built-in text editor** with JSON formatting
-- **Syntax highlighting** for various file types
+- **Integrated text editor** with line numbers and syntax highlighting
+- **Auto-save functionality** for seamless editing experience
+- **External editor support** for advanced editing workflows
+- **File type detection** and appropriate handling
 
 ### 💻 Terminal
 

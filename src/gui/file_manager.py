@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QTextEdit, QTabWidget, QFrame,
     QToolBar, QFileDialog, QMessageBox, QListWidget,
     QComboBox, QSpinBox, QInputDialog, QListWidgetItem,
-    QAbstractItemView, QMenu, QApplication
+    QAbstractItemView, QMenu, QApplication, QDialog
 )
 from PyQt6.QtCore import Qt, QDir, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QFont, QFileSystemModel, QAction
@@ -25,6 +25,7 @@ from src.adb.file_operations import FileOperations, FileInfo
 from src.utils.logger import get_logger, log_file_operation
 from src.services.config_manager import ConfigManager
 from src.services.live_editor import LiveEditorService
+from src.gui.integrated_text_editor import IntegratedTextEditor
 
 
 class FileTransferWorker(QThread):
@@ -993,9 +994,13 @@ class FileManager(QWidget):
         if not selected_files:
             return
         
-        # Only show "Open with..." for single file (not directory) selection
+        # Only show edit options for single file (not directory) selection
         if len(selected_files) == 1 and not selected_files[0].is_directory:
-            open_with_action = QAction("📝 Open with...", self)
+            edit_action = QAction("📝 Edit with Integrated Editor", self)
+            edit_action.triggered.connect(self.open_device_file_with_integrated_editor)
+            menu.addAction(edit_action)
+            
+            open_with_action = QAction("� Open with External Editor...", self)
             open_with_action.triggered.connect(self.open_device_file_with_editor)
             menu.addAction(open_with_action)
             menu.addSeparator()
@@ -1376,3 +1381,59 @@ class FileManager(QWidget):
             "Live Edit Error", 
             f"Error editing {filename}:\n{error_message}"
         )
+    
+    def open_device_file_with_integrated_editor(self):
+        """Open selected device file with integrated text editor."""
+        try:
+            selected_files = self.get_selected_device_files()
+            if not selected_files or len(selected_files) != 1:
+                QMessageBox.information(self, "Invalid Selection", "Please select exactly one file to edit.")
+                return
+            
+            file_info = selected_files[0]
+            if file_info.is_directory:
+                QMessageBox.information(self, "Invalid Selection", "Cannot edit directories. Please select a file.")
+                return
+            
+            # Check file size - warn for large files
+            max_size = 1024 * 1024  # 1MB
+            if file_info.size > max_size:
+                reply = QMessageBox.question(
+                    self,
+                    "Large File Warning",
+                    f"The file '{file_info.name}' is {file_info.size // 1024}KB.\n"
+                    "Large files may take time to load and edit.\n"
+                    "Do you want to continue?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+            
+            # Create and show integrated text editor
+            editor = IntegratedTextEditor(file_info, self.file_ops, self)
+            editor.file_saved.connect(self.on_integrated_editor_file_saved)
+            
+            # Show progress
+            self.progress_label.setText(f"📝 Opening {file_info.name} in integrated editor...")
+            
+            # Show editor dialog
+            result = editor.exec()
+            
+            # Reset progress
+            self.progress_label.setText("Ready")
+            
+            if result == QDialog.DialogCode.Accepted:
+                self.logger.info(f"Integrated editor session completed for {file_info.path}")
+            
+        except Exception as e:
+            self.logger.error(f"Error opening file with integrated editor: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open file with integrated editor: {str(e)}")
+            self.progress_label.setText("Ready")
+    
+    def on_integrated_editor_file_saved(self, device_path: str):
+        """Handle file saved from integrated editor."""
+        filename = device_path.split('/')[-1]
+        self.progress_label.setText(f"💾 Saved {filename} to device")
+        self.logger.info(f"File saved from integrated editor: {device_path}")
+        # Refresh device directory to show updated file
+        self.load_device_directory()
