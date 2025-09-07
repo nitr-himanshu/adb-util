@@ -266,11 +266,15 @@ class Logging(QWidget):
         auto_scroll_layout.addStretch()
         
         # Buffer size
-        auto_scroll_layout.addWidget(QLabel("Buffer size:"))
+        buffer_label = QLabel("Buffer size:")
+        buffer_label.setMinimumWidth(80)  # Ensure label has sufficient width
+        auto_scroll_layout.addWidget(buffer_label)
         self.buffer_size_spin = QSpinBox()
         self.buffer_size_spin.setRange(100, 10000)
         self.buffer_size_spin.setValue(1000)
         self.buffer_size_spin.setSuffix(" lines")
+        self.buffer_size_spin.setMinimumWidth(120)  # Increase width for better visibility
+        self.buffer_size_spin.setMinimumHeight(25)  # Increase height for better visibility
         auto_scroll_layout.addWidget(self.buffer_size_spin)
         
         layout.addLayout(auto_scroll_layout)
@@ -1124,20 +1128,28 @@ class Logging(QWidget):
                 background-color: {input_bg} !important;
                 color: {text_color} !important;
                 border: 1px solid {border_color} !important;
-                padding: 4px;
+                padding: 4px 8px;
                 border-radius: 4px;
-                min-height: 20px;
+                min-height: 24px;
+                min-width: 100px;
+                font-size: 12px;
+                font-weight: normal;
             }}
             QSpinBox:focus {{
                 border-color: {selection_bg} !important;
+                border-width: 2px;
             }}
             QSpinBox::up-button, QSpinBox::down-button {{
                 background-color: {button_bg};
                 border: 1px solid {border_color};
-                width: 16px;
+                width: 18px;
+                border-radius: 2px;
             }}
             QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
                 background-color: {button_hover_bg};
+            }}
+            QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {{
+                background-color: {button_pressed_bg};
             }}
             """
             
@@ -1146,6 +1158,22 @@ class Logging(QWidget):
                 spinbox.style().unpolish(spinbox)
                 spinbox.style().polish(spinbox)
                 spinbox.update()
+                
+            # Apply styling to ALL QLabel widgets (including buffer size label)
+            label_style = f"""
+            QLabel {{
+                color: {text_color} !important;
+                background-color: transparent;
+                font-size: 12px;
+                font-weight: normal;
+            }}
+            """
+            
+            for label in self.findChildren(QLabel):
+                label.setStyleSheet(label_style)
+                label.style().unpolish(label)
+                label.style().polish(label)
+                label.update()
                 
             # Apply styling to ALL QCheckBox widgets
             checkbox_style = f"""
