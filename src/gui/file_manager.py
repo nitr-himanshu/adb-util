@@ -360,18 +360,21 @@ class FileManager(QWidget):
         
         layout.addWidget(self.local_tree)
         
-        # Local file actions - more compact buttons
+        # Local file actions - adjust button width based on text
         local_actions = QHBoxLayout()
         local_actions.setSpacing(5)
         
         upload_btn = QPushButton("⬆️ Upload")
-        upload_btn.setMaximumWidth(75)  # More compact
+        # Calculate width based on text length + padding for icon
+        upload_btn.setMinimumWidth(90)  # Fits "⬆️ Upload" properly
+        upload_btn.setMaximumWidth(90)
         upload_btn.setMaximumHeight(28)
         upload_btn.clicked.connect(self.upload_selected_files)
         local_actions.addWidget(upload_btn)
         
         delete_local_btn = QPushButton("🗑️ Delete")
-        delete_local_btn.setMaximumWidth(75)  # More compact
+        delete_local_btn.setMinimumWidth(85)  # Fits "🗑️ Delete" properly
+        delete_local_btn.setMaximumWidth(85)
         delete_local_btn.setMaximumHeight(28)
         delete_local_btn.clicked.connect(self.delete_local_file)
         local_actions.addWidget(delete_local_btn)
@@ -458,15 +461,15 @@ class FileManager(QWidget):
         device_actions.setSpacing(4)  # Minimal spacing
         
         download_btn = QPushButton("⬇️ Download")
-        download_btn.setMinimumWidth(80)
-        download_btn.setMaximumWidth(80)
+        download_btn.setMinimumWidth(100)  # Fits "⬇️ Download" properly
+        download_btn.setMaximumWidth(100)
         download_btn.setMaximumHeight(28)
         download_btn.clicked.connect(self.download_selected_files)
         device_actions.addWidget(download_btn)
         
         delete_device_btn = QPushButton("🗑️ Delete")
-        delete_device_btn.setMinimumWidth(70)
-        delete_device_btn.setMaximumWidth(70)
+        delete_device_btn.setMinimumWidth(85)  # Fits "🗑️ Delete" properly
+        delete_device_btn.setMaximumWidth(85)
         delete_device_btn.setMaximumHeight(28)
         delete_device_btn.clicked.connect(self.delete_device_file)
         device_actions.addWidget(delete_device_btn)
@@ -509,37 +512,91 @@ class FileManager(QWidget):
         return panel
     
     def create_progress_panel(self):
-        """Create the file transfer progress panel."""
+        """Create the file transfer progress panel with theme toggle."""
         panel = QFrame()
         panel.setFrameStyle(QFrame.Shape.StyledPanel)
-        panel.setMaximumHeight(60)  # Even smaller from 80
-        panel.setMinimumHeight(60)
+        panel.setMaximumHeight(50)  # Slightly larger to accommodate theme button
+        panel.setMinimumHeight(50)
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)  # Minimal margins
-        layout.setSpacing(1)  # Almost no spacing
+        layout.setContentsMargins(4, 2, 4, 2)  # Minimal margins
+        layout.setSpacing(2)  # Small spacing
         
-        # Progress info
+        # Progress info - first row
         progress_layout = QHBoxLayout()
         progress_layout.setContentsMargins(0, 0, 0, 0)
-        progress_layout.setSpacing(8)
+        progress_layout.setSpacing(6)
         
         self.progress_label = QLabel("Ready")
-        self.progress_label.setFont(QFont("Arial", 7))  # Smallest readable font
-        self.progress_label.setMaximumHeight(18)  # Limit height
+        self.progress_label.setFont(QFont("Arial", 8))
         progress_layout.addWidget(self.progress_label)
         
         progress_layout.addStretch()
         
         self.speed_label = QLabel("")
-        self.speed_label.setFont(QFont("Arial", 7))  # Smallest readable font
-        self.speed_label.setMaximumHeight(18)  # Limit height
+        self.speed_label.setFont(QFont("Arial", 8))
         progress_layout.addWidget(self.speed_label)
         
         layout.addLayout(progress_layout)
         
-        # Progress bar
+        # Theme toggle row - second row
+        theme_layout = QHBoxLayout()
+        theme_layout.setContentsMargins(0, 0, 0, 0)
+        theme_layout.setSpacing(6)
+        
+        theme_layout.addStretch()  # Center the button
+        
+        # Theme toggle button
+        from utils.theme_manager import theme_manager
+        current_theme = theme_manager.get_current_theme()
+        theme_icon = "🌙" if current_theme == "dark" else "☀️"
+        theme_text = "Dark Mode" if current_theme == "light" else "Light Mode"
+        
+        self.theme_toggle_btn = QPushButton(f"{theme_icon} {theme_text}")
+        self.theme_toggle_btn.setFont(QFont("Arial", 8))
+        self.theme_toggle_btn.setMinimumWidth(100)
+        self.theme_toggle_btn.setMaximumWidth(100)
+        self.theme_toggle_btn.setMaximumHeight(20)
+        self.theme_toggle_btn.setToolTip(f"Switch to {theme_text.lower()}")
+        self.theme_toggle_btn.clicked.connect(self.toggle_theme)
+        
+        # Style the button based on current theme
+        if current_theme == "dark":
+            self.theme_toggle_btn.setStyleSheet("""
+                QPushButton {
+                    color: #FFD700; 
+                    border: 1px solid #555; 
+                    border-radius: 3px; 
+                    padding: 2px;
+                    background-color: #2d2d2d;
+                }
+                QPushButton:hover {
+                    background-color: #3d3d3d;
+                    border-color: #777;
+                }
+            """)
+        else:
+            self.theme_toggle_btn.setStyleSheet("""
+                QPushButton {
+                    color: #4169E1; 
+                    border: 1px solid #ccc; 
+                    border-radius: 3px; 
+                    padding: 2px;
+                    background-color: #f5f5f5;
+                }
+                QPushButton:hover {
+                    background-color: #e5e5e5;
+                    border-color: #999;
+                }
+            """)
+        
+        theme_layout.addWidget(self.theme_toggle_btn)
+        theme_layout.addStretch()  # Center the button
+        
+        layout.addLayout(theme_layout)
+        
+        # Progress bar - inline with text
         self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumHeight(12)  # Much thinner progress bar
+        self.progress_bar.setMaximumHeight(6)  # Very thin progress bar
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
         
@@ -1089,6 +1146,58 @@ class FileManager(QWidget):
             self.config.add_bookmark(current_path, "device", name)
             self.populate_device_path_combo()
             QMessageBox.information(self, "Bookmark Added", f"Bookmarked: {name}")
+    
+    def toggle_theme(self):
+        """Toggle between light and dark theme."""
+        try:
+            from utils.theme_manager import theme_manager
+            
+            # Toggle theme
+            theme_manager.toggle_theme()
+            current_theme = theme_manager.get_current_theme()
+            
+            # Update button text and style
+            theme_icon = "🌙" if current_theme == "dark" else "☀️"
+            theme_text = "Dark Mode" if current_theme == "light" else "Light Mode"
+            
+            self.theme_toggle_btn.setText(f"{theme_icon} {theme_text}")
+            self.theme_toggle_btn.setToolTip(f"Switch to {theme_text.lower()}")
+            
+            # Update button style based on new theme
+            if current_theme == "dark":
+                self.theme_toggle_btn.setStyleSheet("""
+                    QPushButton {
+                        color: #FFD700; 
+                        border: 1px solid #555; 
+                        border-radius: 3px; 
+                        padding: 2px;
+                        background-color: #2d2d2d;
+                    }
+                    QPushButton:hover {
+                        background-color: #3d3d3d;
+                        border-color: #777;
+                    }
+                """)
+            else:
+                self.theme_toggle_btn.setStyleSheet("""
+                    QPushButton {
+                        color: #4169E1; 
+                        border: 1px solid #ccc; 
+                        border-radius: 3px; 
+                        padding: 2px;
+                        background-color: #f5f5f5;
+                    }
+                    QPushButton:hover {
+                        background-color: #e5e5e5;
+                        border-color: #999;
+                    }
+                """)
+                
+            self.logger.info(f"Theme switched to: {current_theme}")
+            
+        except Exception as e:
+            self.logger.error(f"Error toggling theme: {e}")
+            QMessageBox.warning(self, "Theme Error", f"Failed to switch theme: {e}")
     
     def closeEvent(self, event):
         """Handle widget close event."""
