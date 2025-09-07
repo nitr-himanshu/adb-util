@@ -6,6 +6,7 @@ A comprehensive Python-based desktop application for Android Debug Bridge (ADB) 
 
 import sys
 import signal
+import os
 from pathlib import Path
 
 # Add src directory to path for imports
@@ -30,10 +31,21 @@ _main_window = None
 
 def signal_handler(signum, frame):
     """Handle keyboard interrupt (Ctrl+C) gracefully."""
+    signal_names = {
+        signal.SIGINT: "SIGINT (Ctrl+C)",
+        signal.SIGTERM: "SIGTERM (Termination)"
+    }
+    
     try:
         from utils.logger import get_logger, log_shutdown
         logger = get_logger(__name__)
-        logger.info(f"Received signal {signum}, shutting down gracefully...")
+        
+        # Log the interrupt with detailed information
+        signal_name = signal_names.get(signum, f"Signal {signum}")
+        logger.warning(f"=== INTERRUPT RECEIVED ===")
+        logger.warning(f"Signal: {signal_name}")
+        logger.warning(f"Process ID: {os.getpid()}")
+        logger.warning(f"Initiating graceful shutdown...")
         
         # Try to cleanup main window if it exists
         global _main_window
@@ -41,8 +53,8 @@ def signal_handler(signum, frame):
             try:
                 logger.info("Closing main window...")
                 _main_window.close()
-            except:
-                pass
+            except Exception as e:
+                logger.error(f"Error closing main window: {e}")
         
         # Try to get the QApplication instance and quit properly
         try:
@@ -51,12 +63,17 @@ def signal_handler(signum, frame):
             if app:
                 logger.info("Closing Qt application...")
                 app.quit()
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error closing Qt application: {e}")
         
+        logger.info("Shutdown sequence completed")
         log_shutdown()
-    except:
-        print("\nShutting down gracefully...")
+        
+    except Exception as e:
+        print(f"\n=== INTERRUPT RECEIVED ===")
+        print(f"Signal: {signal_names.get(signum, f'Signal {signum}')}")
+        print(f"Error during shutdown: {e}")
+        print("Shutting down gracefully...")
     
     # Exit cleanly
     sys.exit(0)
