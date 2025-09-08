@@ -430,6 +430,30 @@ class ScriptEditorDialog(QDialog):
             self.description_edit.setText(self.script.description)
         layout.addRow("Description:", self.description_edit)
         
+        # Is Template checkbox
+        self.is_template_check = QCheckBox("Mark as template")
+        self.is_template_check.setToolTip("Template scripts can be used as starting points for new scripts")
+        if not self.is_new_script:
+            self.is_template_check.setChecked(self.script.is_template)
+        layout.addRow("Options:", self.is_template_check)
+        
+        # Is Visible checkbox
+        self.is_visible_check = QCheckBox("Show in script list")
+        self.is_visible_check.setToolTip("Uncheck to hide this script from the main list")
+        self.is_visible_check.setChecked(True)  # Default to visible
+        if not self.is_new_script:
+            self.is_visible_check.setChecked(self.script.is_visible)
+        
+        # Add both checkboxes in a horizontal layout
+        checkbox_layout = QHBoxLayout()
+        checkbox_layout.addWidget(self.is_template_check)
+        checkbox_layout.addWidget(self.is_visible_check)
+        checkbox_layout.addStretch()
+        
+        checkbox_widget = QWidget()
+        checkbox_widget.setLayout(checkbox_layout)
+        layout.addRow("", checkbox_widget)
+        
         return group
     
     def create_editor_section(self) -> QWidget:
@@ -718,6 +742,8 @@ df | grep -E "/data|/system"'''
         script_type = self.type_combo.currentData()
         description = self.description_edit.toPlainText().strip()
         content = self.editor.toPlainText()
+        is_template = self.is_template_check.isChecked()
+        is_visible = self.is_visible_check.isChecked()
         
         try:
             # Determine file extension
@@ -747,7 +773,9 @@ df | grep -E "/data|/system"'''
             if self.is_new_script:
                 from services.script_manager import get_script_manager
                 script_manager = get_script_manager()
-                script_id = script_manager.add_script(name, script_type, str(script_path), description)
+                script_id = script_manager.add_script(
+                    name, script_type, str(script_path), description, is_template, is_visible
+                )
                 self.script_saved.emit(script_id)
             else:
                 # Update existing script
@@ -767,7 +795,9 @@ df | grep -E "/data|/system"'''
                     name=name,
                     script_type=script_type,
                     script_path=str(script_path),
-                    description=description
+                    description=description,
+                    is_template=is_template,
+                    is_visible=is_visible
                 )
                 self.script_saved.emit(self.script.id)
             

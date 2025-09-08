@@ -8,6 +8,7 @@ Supports Windows .bat files and Linux .sh files with async output capture.
 import os
 from pathlib import Path
 from typing import Optional, Dict, List
+from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -311,6 +312,18 @@ class ScriptManagerTab(QWidget):
         self.import_button.setToolTip("Import script from file")
         header_layout.addWidget(self.import_button)
         
+        # Export JSON button
+        self.export_json_button = QPushButton("📤 Export JSON")
+        self.export_json_button.clicked.connect(self.export_scripts_json)
+        self.export_json_button.setToolTip("Export scripts to JSON format")
+        header_layout.addWidget(self.export_json_button)
+        
+        # Import JSON button
+        self.import_json_button = QPushButton("📥 Import JSON")
+        self.import_json_button.clicked.connect(self.import_scripts_json)
+        self.import_json_button.setToolTip("Import scripts from JSON format")
+        header_layout.addWidget(self.import_json_button)
+        
         # Refresh button
         self.refresh_button = QPushButton("🔄 Refresh")
         self.refresh_button.clicked.connect(self.load_scripts)
@@ -380,11 +393,15 @@ class ScriptManagerTab(QWidget):
         self.details_created = QLabel()
         self.details_last_run = QLabel()
         self.details_run_count = QLabel()
+        self.details_template = QLabel()
+        self.details_visible = QLabel()
         
         details_layout.addRow("Name:", self.details_name)
         details_layout.addRow("Type:", self.details_type)
         details_layout.addRow("Path:", self.details_path)
         details_layout.addRow("Description:", self.details_description)
+        details_layout.addRow("Template:", self.details_template)
+        details_layout.addRow("Visible:", self.details_visible)
         details_layout.addRow("Created:", self.details_created)
         details_layout.addRow("Last Run:", self.details_last_run)
         details_layout.addRow("Run Count:", self.details_run_count)
@@ -446,16 +463,25 @@ class ScriptManagerTab(QWidget):
         
         scripts = self.script_manager.get_all_scripts()
         for script in scripts:
+            # Skip hidden scripts
+            if not script.is_visible:
+                continue
+                
             item = QListWidgetItem(script.name)
             item.setData(Qt.ItemDataRole.UserRole, script.id)
             
-            # Set icon based on type
+            # Set icon based on type and template status
+            icon = ""
             if script.script_type == ScriptType.HOST_WINDOWS:
-                item.setText(f"🖥️ {script.name}")
+                icon = "🖥️"
             elif script.script_type == ScriptType.HOST_LINUX:
-                item.setText(f"🐧 {script.name}")
+                icon = "🐧"
             else:  # DEVICE
-                item.setText(f"📱 {script.name}")
+                icon = "📱"
+            
+            # Add template indicator
+            template_indicator = " 📄" if script.is_template else ""
+            item.setText(f"{icon} {script.name}{template_indicator}")
             
             self.script_list.addItem(item)
         
@@ -494,6 +520,8 @@ class ScriptManagerTab(QWidget):
         self.details_type.setText(script.script_type.value.replace('_', ' ').title())
         self.details_path.setText(script.script_path)
         self.details_description.setText(script.description or "No description")
+        self.details_template.setText("Yes" if script.is_template else "No")
+        self.details_visible.setText("Yes" if script.is_visible else "No")
         self.details_created.setText(script.created_at)
         self.details_last_run.setText(script.last_run or "Never")
         self.details_run_count.setText(str(script.run_count))
@@ -517,6 +545,8 @@ class ScriptManagerTab(QWidget):
         self.details_type.setText("")
         self.details_path.setText("")
         self.details_description.setText("")
+        self.details_template.setText("")
+        self.details_visible.setText("")
         self.details_created.setText("")
         self.details_last_run.setText("")
         self.details_run_count.setText("")
@@ -770,6 +800,17 @@ class ScriptManagerTab(QWidget):
         import_action.triggered.connect(self.import_script)
         menu.addAction(import_action)
         
+        # JSON import/export actions
+        menu.addSeparator()
+        
+        export_json_action = QAction("📤 Export to JSON", self)
+        export_json_action.triggered.connect(self.export_scripts_json)
+        menu.addAction(export_json_action)
+        
+        import_json_action = QAction("📥 Import from JSON", self)
+        import_json_action.triggered.connect(self.import_scripts_json)
+        menu.addAction(import_json_action)
+        
         if item:
             menu.addSeparator()
             
@@ -945,6 +986,105 @@ class ScriptManagerTab(QWidget):
             dialog = self.output_dialogs[execution_id]
             if not dialog.isVisible():
                 del self.output_dialogs[execution_id]
+    
+    def export_scripts_json(self):
+        """Export scripts to JSON format."""
+        # Get selected scripts or all scripts
+        selected_items = self.script_list.selectedItems()
+        script_ids = None
+        
+        if selected_items:
+            script_ids = [item.data(Qt.ItemDataRole.UserRole) for item in selected_items]
+            count_text = f"{len(script_ids)} selected scripts"
+        else:
+            count_text = "all scripts"
+        
+        # Get save file path
+        default_filename = f"adb_util_scripts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            f"Export {count_text} to JSON", 
+            str(Path.home() / default_filename),
+            "JSON Files (*.json);;All Files (*)"
+        )
+        
+        if file_path:
+            try:
+                success = self.script_manager.export_scripts_to_json(file_path, script_ids)
+                
+                if success:
+                    QMessageBox.information(
+                        self, "Success", 
+                        f"Scripts exported successfully to:\n{file_path}"
+                    )
+                    self.logger.info(f"Scripts exported to JSON: {file_path}")
+                else:
+                    QMessageBox.critical(
+                        self, "Export Error", 
+                        "Failed to export scripts. Check logs for details."
+                    )
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", f"Failed to export scripts:\n{e}")
+                self.logger.error(f"Failed to export scripts: {e}")
+    
+    def import_scripts_json(self):
+        """Import scripts from JSON format."""
+        # Get file to import
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "Import Scripts from JSON", 
+            str(Path.home()),
+            "JSON Files (*.json);;All Files (*)"
+        )
+        
+        if not file_path:
+            return
+        
+        # Ask about overwriting existing scripts
+        reply = QMessageBox.question(
+            self,
+            "Import Options",
+            "Do you want to overwrite existing scripts with the same name?\n\n"
+            "Yes: Overwrite existing scripts\n"
+            "No: Skip existing scripts\n"
+            "Cancel: Abort import",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+        )
+        
+        if reply == QMessageBox.StandardButton.Cancel:
+            return
+        
+        overwrite_existing = reply == QMessageBox.StandardButton.Yes
+        
+        try:
+            imported_count, skipped_count = self.script_manager.import_scripts_from_json(
+                file_path, overwrite_existing
+            )
+            
+            # Show results
+            message_parts = []
+            if imported_count > 0:
+                message_parts.append(f"✅ {imported_count} scripts imported successfully")
+            if skipped_count > 0:
+                message_parts.append(f"⚠️ {skipped_count} scripts skipped")
+            
+            if imported_count == 0 and skipped_count == 0:
+                message = "No scripts were imported. Check the JSON file format."
+                QMessageBox.warning(self, "Import Result", message)
+            else:
+                message = "\n".join(message_parts)
+                QMessageBox.information(self, "Import Result", message)
+                
+                # Refresh the script list if any scripts were imported
+                if imported_count > 0:
+                    self.load_scripts()
+            
+            self.logger.info(f"Scripts imported from JSON: {file_path} - {imported_count} imported, {skipped_count} skipped")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Import Error", f"Failed to import scripts:\n{e}")
+            self.logger.error(f"Failed to import scripts: {e}")
     
     def apply_theme(self):
         """Apply current theme."""

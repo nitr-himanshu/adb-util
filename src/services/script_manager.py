@@ -49,6 +49,8 @@ class Script:
     created_at: str = ""
     last_run: str = ""
     run_count: int = 0
+    is_template: bool = False
+    is_visible: bool = True
     
     def __post_init__(self):
         if not self.created_at:
@@ -351,7 +353,7 @@ class ScriptManager(QObject):
             self.logger.error(f"Error saving executions: {e}")
     
     def add_script(self, name: str, script_type: ScriptType, script_path: str, 
-                   description: str = "") -> str:
+                   description: str = "", is_template: bool = False, is_visible: bool = True) -> str:
         """Add a new script."""
         script_id = str(uuid.uuid4())
         script = Script(
@@ -359,7 +361,9 @@ class ScriptManager(QObject):
             name=name,
             script_type=script_type,
             script_path=script_path,
-            description=description
+            description=description,
+            is_template=is_template,
+            is_visible=is_visible
         )
         
         self.scripts[script_id] = script
@@ -561,6 +565,198 @@ class ScriptManager(QObject):
         
         if executions_to_remove:
             self.logger.info(f"Cleaned up {len(executions_to_remove)} old execution records")
+    
+    def export_scripts_to_json(self, file_path: str, script_ids: List[str] = None) -> bool:
+        """
+        Export scripts to JSON format.
+        
+        Args:
+            file_path: Path to save the JSON file
+            script_ids: List of script IDs to export (None for all scripts)
+            
+        Returns:
+            bool: True if export successful, False otherwise
+        """
+        try:
+            scripts_to_export = []
+            
+            if script_ids is None:
+                scripts_to_export = list(self.scripts.values())
+            else:
+                scripts_to_export = [
+                    script for script_id, script in self.scripts.items()
+                    if script_id in script_ids
+                ]
+            
+            export_data = []
+            
+            for script in scripts_to_export:
+                # Create export entry (without script content)
+                export_entry = {
+                    "name": script.name,
+                    "script_path": script.script_path,
+                    "type": script.script_type.value,
+                    "isTemplate": script.is_template,
+                    "show": script.is_visible,
+                    "description": script.description,
+                    "created_at": script.created_at,
+                    "last_run": script.last_run,
+                    "run_count": script.run_count
+                }
+                
+                export_data.append(export_entry)
+            
+            # Save to JSON file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
+            
+            self.logger.info(f"Exported {len(export_data)} scripts to {file_path}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to export scripts to JSON: {e}")
+            return False
+    
+    def import_scripts_from_json(self, file_path: str, overwrite_existing: bool = False) -> tuple[int, int]:
+        """
+        Import scripts from JSON format.
+        
+        Args:
+            file_path: Path to the JSON file to import
+            overwrite_existing: Whether to overwrite existing scripts with same name
+            
+        Returns:
+            tuple: (imported_count, skipped_count)
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                import_data = json.load(f)
+            
+            if not isinstance(import_data, list):
+                raise ValueError("JSON file must contain a list of scripts")
+            
+            imported_count = 0
+            skipped_count = 0
+            
+            for script_data in import_data:
+                try:
+                    # Validate required fields
+                    if not all(key in script_data for key in ["name", "script_path", "type"]):
+                        self.logger.warning(f"Skipping script with missing required fields: {script_data.get('name', 'Unknown')}")
+                        skipped_count += 1
+                        continue
+                    
+                    script_name = script_data["name"]
+                    script_type_str = script_data["type"]
+                    
+                    # Create default content based on script type if not provided
+                    script_content = script_data.get("content", "")
+                    if not script_content:
+                        if script_type_str == "host_windows":
+                            script_content = "@echo off\necho Script: {}\necho Please edit this script to add your commands\npause".format(script_name)
+                        elif script_type_str == "device":
+                            script_content = "#!/system/bin/sh\necho \"Script: {}\"\necho \"Please edit this script to add your commands\"".format(script_name)
+                        else:  # host_linux
+                            script_content = "#!/bin/bash\necho \"Script: {}\"\necho \"Please edit this script to add your commands\"".format(script_name)
+                    
+                    # Validate script type
+                    try:
+                        script_type = ScriptType(script_type_str)
+                    except ValueError:
+                        self.logger.warning(f"Invalid script type '{script_type_str}' for script '{script_name}'")
+                        skipped_count += 1
+                        continue
+                    
+                    # Check if script with same name already exists
+                    existing_script = None
+                    for script in self.scripts.values():
+                        if script.name == script_name and script.script_type == script_type:
+                            existing_script = script
+                            break
+                    
+                    if existing_script and not overwrite_existing:
+                        self.logger.info(f"Skipping existing script: {script_name}")
+                        skipped_count += 1
+                        continue
+                    
+                    # Create script file
+                    scripts_dir = Path.home() / ".adb-util" / "user_scripts"
+                    scripts_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Determine file extension
+                    if script_type == ScriptType.HOST_WINDOWS:
+                        ext = ".bat"
+                    else:
+                        ext = ".sh"
+                    
+                    # Create unique filename
+                    base_filename = "".join(c for c in script_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                    base_filename = base_filename.replace(' ', '_')
+                    script_filename = f"{base_filename}{ext}"
+                    script_path = scripts_dir / script_filename
+                    
+                    counter = 1
+                    while script_path.exists():
+                        script_filename = f"{base_filename}_{counter}{ext}"
+                        script_path = scripts_dir / script_filename
+                        counter += 1
+                    
+                    # Write script content
+                    with open(script_path, 'w', encoding='utf-8') as f:
+                        f.write(script_content)
+                    
+                    # Make executable if shell script on Unix
+                    if script_type in [ScriptType.HOST_LINUX, ScriptType.DEVICE] and os.name != 'nt':
+                        os.chmod(script_path, 0o755)
+                    
+                    # Create script object
+                    if existing_script:
+                        # Update existing script
+                        existing_script.script_path = str(script_path)
+                        existing_script.description = script_data.get("description", "")
+                        existing_script.is_template = script_data.get("isTemplate", False)
+                        existing_script.is_visible = script_data.get("show", True)
+                        if "created_at" in script_data:
+                            existing_script.created_at = script_data["created_at"]
+                        if "last_run" in script_data:
+                            existing_script.last_run = script_data["last_run"]
+                        if "run_count" in script_data:
+                            existing_script.run_count = script_data["run_count"]
+                    else:
+                        # Create new script
+                        script_id = str(uuid.uuid4())
+                        script = Script(
+                            id=script_id,
+                            name=script_name,
+                            script_type=script_type,
+                            script_path=str(script_path),
+                            description=script_data.get("description", ""),
+                            is_template=script_data.get("isTemplate", False),
+                            is_visible=script_data.get("show", True),
+                            created_at=script_data.get("created_at", datetime.now().isoformat()),
+                            last_run=script_data.get("last_run", ""),
+                            run_count=script_data.get("run_count", 0)
+                        )
+                        
+                        self.scripts[script_id] = script
+                        self.script_added.emit(script_id)
+                    
+                    imported_count += 1
+                    self.logger.info(f"Imported script: {script_name}")
+                    
+                except Exception as e:
+                    self.logger.error(f"Failed to import script {script_data.get('name', 'Unknown')}: {e}")
+                    skipped_count += 1
+            
+            # Save scripts
+            self._save_scripts()
+            
+            self.logger.info(f"Import completed: {imported_count} imported, {skipped_count} skipped")
+            return imported_count, skipped_count
+            
+        except Exception as e:
+            self.logger.error(f"Failed to import scripts from JSON: {e}")
+            return 0, 0
 
 
 # Global script manager instance
