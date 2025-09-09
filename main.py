@@ -9,22 +9,24 @@ import signal
 import os
 from pathlib import Path
 
-# Add src directory to path for imports
-src_path = Path(__file__).parent / "src"
-sys.path.insert(0, str(src_path))
+def setup_path():
+    """Setup module path for both development and PyInstaller environments."""
+    if getattr(sys, 'frozen', False):
+        # Running in PyInstaller bundle
+        application_path = Path(sys.executable).parent
+        src_path = application_path / "src"
+        if src_path.exists():
+            sys.path.insert(0, str(src_path))
+        # Also add the bundle's internal src path
+        bundle_src = Path(sys._MEIPASS) / "src" if hasattr(sys, '_MEIPASS') else None
+        if bundle_src and bundle_src.exists():
+            sys.path.insert(0, str(bundle_src))
+    else:
+        # Running in development
+        src_path = Path(__file__).parent / "src"
+        sys.path.insert(0, str(src_path))
 
-"""
-ADB-UTIL - Main Application Entry Point
-
-A comprehensive Python-based desktop application for Android Debug Bridge (ADB) operations.
-"""
-
-import sys
-from pathlib import Path
-
-# Add src directory to path for imports
-src_path = Path(__file__).parent / "src"
-sys.path.insert(0, str(src_path))
+setup_path()
 
 # Global reference to main window for signal handler
 _main_window = None
