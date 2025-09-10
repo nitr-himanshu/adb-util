@@ -108,8 +108,18 @@ jobs:
         copy dist\adb-util.exe.sha256 release-windows\
         copy README.md release-windows\
         copy LICENSE release-windows\
+        copy SYSTEM_REQUIREMENTS.md release-windows\
         echo "ADB-UTIL for Windows" > release-windows\README.txt
-        echo "Run adb-util.exe to start the application" >> release-windows\README.txt
+        echo "" >> release-windows\README.txt
+        echo "IMPORTANT: This application requires Android Debug Bridge (ADB) tools" >> release-windows\README.txt
+        echo "to be installed separately on your system." >> release-windows\README.txt
+        echo "" >> release-windows\README.txt
+        echo "1. Install ADB tools from:" >> release-windows\README.txt
+        echo "   https://developer.android.com/studio/releases/platform-tools" >> release-windows\README.txt
+        echo "2. Add ADB to your system PATH" >> release-windows\README.txt
+        echo "3. Run adb-util.exe" >> release-windows\README.txt
+        echo "" >> release-windows\README.txt
+        echo "See SYSTEM_REQUIREMENTS.md for detailed installation instructions." >> release-windows\README.txt
         7z a -tzip adb-util-windows.zip release-windows\*
     
     - name: Upload Windows artifacts
@@ -200,10 +210,19 @@ jobs:
         cp dist/adb-util.sha256 release-linux/
         cp README.md release-linux/
         cp LICENSE release-linux/
+        cp SYSTEM_REQUIREMENTS.md release-linux/
         echo "ADB-UTIL for Linux (Ubuntu 22.04+)" > release-linux/README.txt
-        echo "Make sure you have Qt6 installed:" >> release-linux/README.txt
-        echo "sudo apt-get install qt6-base-dev android-tools-adb" >> release-linux/README.txt
-        echo "Run ./adb-util to start the application" >> release-linux/README.txt
+        echo "" >> release-linux/README.txt
+        echo "IMPORTANT: This application requires Android Debug Bridge (ADB) tools" >> release-linux/README.txt
+        echo "to be installed separately on your system." >> release-linux/README.txt
+        echo "" >> release-linux/README.txt
+        echo "1. Install ADB tools:" >> release-linux/README.txt
+        echo "   sudo apt-get install android-tools-adb" >> release-linux/README.txt
+        echo "2. Install Qt6 runtime (if not already installed):" >> release-linux/README.txt
+        echo "   sudo apt-get install qt6-base-dev" >> release-linux/README.txt
+        echo "3. Run ./adb-util" >> release-linux/README.txt
+        echo "" >> release-linux/README.txt
+        echo "See SYSTEM_REQUIREMENTS.md for detailed installation instructions." >> release-linux/README.txt
         tar -czf adb-util-linux.tar.gz -C release-linux .
     
     - name: Upload Linux artifacts
@@ -240,21 +259,30 @@ jobs:
         body: |
           ## ADB-UTIL Release
           
+          ### Important Note
+          **ADB-UTIL requires Android Debug Bridge (ADB) tools to be installed separately on your system.**
+          
           ### Downloads
           - **Windows**: Download `adb-util-windows.zip`
           - **Linux (Ubuntu 22.04+)**: Download `adb-util-linux.tar.gz`
           
-          ### Installation
+          ### Quick Installation
           
           #### Windows
-          1. Download and extract `adb-util-windows.zip`
-          2. Run `adb-util.exe`
+          1. **Install ADB tools**: Download from [Android Platform Tools](https://developer.android.com/studio/releases/platform-tools)
+          2. **Add ADB to PATH**: Add the extracted folder to your system PATH
+          3. **Run ADB-UTIL**: Extract `adb-util-windows.zip` and run `adb-util.exe`
           
           #### Linux
-          1. Download and extract `adb-util-linux.tar.gz`
-          2. Install dependencies: `sudo apt-get install qt6-base-dev android-tools-adb`
-          3. Run `./adb-util`
+          1. **Install dependencies**: `sudo apt-get install android-tools-adb qt6-base-dev`
+          2. **Run ADB-UTIL**: Extract `adb-util-linux.tar.gz` and run `./adb-util`
           
-          ### Checksums
+          ### Verification
+          Test ADB installation with: `adb version`
+          
+          ### Security
           SHA256 checksums are included in each archive for verification.
+          
+          ### Documentation
+          See `SYSTEM_REQUIREMENTS.md` in the archive for detailed installation instructions.
         token: ${{ secrets.GITHUB_TOKEN }}

@@ -8,8 +8,8 @@ PyQt6>=6.5.0
 # Async Qt integration
 qasync>=0.24.0
 
-# ADB Integration
-python-adb>=0.3.0
+# Note: ADB integration is done via system 'adb' binary (subprocess calls)
+# No Python ADB library is required - install Android Platform Tools separately
 
 # Async File Operations
 aiofiles>=23.0.0

@@ -137,13 +137,23 @@ if exist "dist\adb-util.exe" (
     copy "dist\adb-util.exe.sha256" "release\"
     if exist "README.md" copy "README.md" "release\"
     if exist "LICENSE" copy "LICENSE" "release\"
+    if exist "SYSTEM_REQUIREMENTS.md" copy "SYSTEM_REQUIREMENTS.md" "release\"
     
     (
     echo ADB-UTIL for Windows
     echo.
+    echo IMPORTANT: This application requires Android Debug Bridge ^(ADB^) tools
+    echo to be installed separately on your system.
+    echo.
     echo Installation:
-    echo 1. Extract all files from the archive
-    echo 2. Run adb-util.exe
+    echo 1. Install ADB tools from:
+    echo    https://developer.android.com/studio/releases/platform-tools
+    echo 2. Add ADB to your system PATH environment variable
+    echo 3. Extract all files from this archive
+    echo 4. Run adb-util.exe
+    echo.
+    echo Verification:
+    echo Test ADB installation by running: adb version
     echo.
     echo Security Note:
     echo This executable is built with PyInstaller and may trigger
@@ -152,9 +162,10 @@ if exist "dist\adb-util.exe" (
     echo.
     echo Requirements:
     echo - Windows 10 or later
-    echo - Administrator privileges may be required for ADB operations
+    echo - Android Debug Bridge ^(ADB^) tools
+    echo - Administrator privileges may be required for some ADB operations
     echo.
-    echo For issues, please check the project repository.
+    echo See SYSTEM_REQUIREMENTS.md for detailed installation instructions.
     ) > "release\README-Windows.txt"
     
     echo Release package prepared in 'release' folder
