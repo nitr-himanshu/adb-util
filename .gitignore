@@ -133,6 +133,7 @@ dmypy.json
 config.json
 saved_commands.json
 *.log
+version_info.py
 
 # OS specific
 .DS_Store
