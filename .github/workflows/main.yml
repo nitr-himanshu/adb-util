@@ -37,90 +37,35 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
     
-    - name: Create icon and metadata files
-      run: |
-        # Create version info for Windows executable
-        echo 'VSVersionInfo(' > version_info.py
-        echo '  ffi=FixedFileInfo(' >> version_info.py
-        echo '    filevers=(1, 0, 0, 0),' >> version_info.py
-        echo '    prodvers=(1, 0, 0, 0),' >> version_info.py
-        echo '    mask=0x3f,' >> version_info.py
-        echo '    flags=0x0,' >> version_info.py
-        echo '    OS=0x4,' >> version_info.py
-        echo '    fileType=0x1,' >> version_info.py
-        echo '    subtype=0x0,' >> version_info.py
-        echo '    date=(0, 0)' >> version_info.py
-        echo '  ),' >> version_info.py
-        echo '  kids=[' >> version_info.py
-        echo '    StringFileInfo([' >> version_info.py
-        echo '      StringTable(' >> version_info.py
-        echo '        u"040904B0",' >> version_info.py
-        echo '        [StringStruct(u"CompanyName", u"ADB-UTIL Project"),' >> version_info.py
-        echo '         StringStruct(u"FileDescription", u"Android Debug Bridge Utility"),' >> version_info.py
-        echo '         StringStruct(u"FileVersion", u"1.0.0.0"),' >> version_info.py
-        echo '         StringStruct(u"InternalName", u"adb-util"),' >> version_info.py
-        echo '         StringStruct(u"LegalCopyright", u"MIT License"),' >> version_info.py
-        echo '         StringStruct(u"OriginalFilename", u"adb-util.exe"),' >> version_info.py
-        echo '         StringStruct(u"ProductName", u"ADB-UTIL"),' >> version_info.py
-        echo '         StringStruct(u"ProductVersion", u"1.0.0.0")])' >> version_info.py
-        echo '    ]),' >> version_info.py
-        echo '    VarFileInfo([VarStruct(u"Translation", [1033, 1200])])' >> version_info.py
-        echo '  ]' >> version_info.py
-        echo ')' >> version_info.py
+    - name: Create version info file
+      run: python create_version_info.py
     
     - name: Build Windows executable
-      run: |
-        pyinstaller ^
-          --onefile ^
-          --name adb-util ^
-          --paths src ^
-          --add-data "src;src" ^
-          --hidden-import PyQt6 ^
-          --hidden-import PyQt6.QtCore ^
-          --hidden-import PyQt6.QtGui ^
-          --hidden-import PyQt6.QtWidgets ^
-          --hidden-import qasync ^
-          --hidden-import aiofiles ^
-          --hidden-import psutil ^
-          --hidden-import watchdog ^
-          --collect-all PyQt6 ^
-          --version-file version_info.py ^
-          --exclude-module matplotlib ^
-          --exclude-module numpy ^
-          --exclude-module pandas ^
-          --exclude-module PIL ^
-          --exclude-module tkinter ^
-          --uac-admin ^
-          --noconsole ^
-          main.py
+      run: pyinstaller --onefile --name adb-util --paths src --add-data "src;src" --hidden-import PyQt6 --hidden-import PyQt6.QtCore --hidden-import PyQt6.QtGui --hidden-import PyQt6.QtWidgets --hidden-import qasync --hidden-import aiofiles --hidden-import psutil --hidden-import watchdog --collect-all PyQt6 --version-file version_info.py --exclude-module matplotlib --exclude-module numpy --exclude-module pandas --exclude-module PIL --exclude-module tkinter --uac-admin --noconsole main.py
     
-    - name: Sign Windows executable (optional)
-      continue-on-error: true
+    - name: Create Windows package
       run: |
-        # This would require a code signing certificate
-        # For now, we'll just create a checksum
-        certutil -hashfile dist\adb-util.exe SHA256 > dist\adb-util.exe.sha256
-    
-    - name: Create Windows archive
-      run: |
+        certutil -hashfile "dist\adb-util.exe" SHA256 > "dist\adb-util.exe.sha256"
         mkdir release-windows
-        copy dist\adb-util.exe release-windows\
-        copy dist\adb-util.exe.sha256 release-windows\
-        copy README.md release-windows\
-        copy LICENSE release-windows\
-        copy SYSTEM_REQUIREMENTS.md release-windows\
-        echo "ADB-UTIL for Windows" > release-windows\README.txt
-        echo "" >> release-windows\README.txt
-        echo "IMPORTANT: This application requires Android Debug Bridge (ADB) tools" >> release-windows\README.txt
-        echo "to be installed separately on your system." >> release-windows\README.txt
-        echo "" >> release-windows\README.txt
-        echo "1. Install ADB tools from:" >> release-windows\README.txt
-        echo "   https://developer.android.com/studio/releases/platform-tools" >> release-windows\README.txt
-        echo "2. Add ADB to your system PATH" >> release-windows\README.txt
-        echo "3. Run adb-util.exe" >> release-windows\README.txt
-        echo "" >> release-windows\README.txt
-        echo "See SYSTEM_REQUIREMENTS.md for detailed installation instructions." >> release-windows\README.txt
-        7z a -tzip adb-util-windows.zip release-windows\*
+        copy "dist\adb-util.exe" "release-windows\"
+        copy "dist\adb-util.exe.sha256" "release-windows\"
+        if (Test-Path "README.md") { copy "README.md" "release-windows\" }
+        if (Test-Path "LICENSE") { copy "LICENSE" "release-windows\" }
+        if (Test-Path "SYSTEM_REQUIREMENTS.md") { copy "SYSTEM_REQUIREMENTS.md" "release-windows\" }
+        @"
+        ADB-UTIL for Windows
+        
+        IMPORTANT: This application requires Android Debug Bridge (ADB) tools
+        to be installed separately on your system.
+        
+        1. Install ADB tools from:
+           https://developer.android.com/studio/releases/platform-tools
+        2. Add ADB to your system PATH
+        3. Run adb-util.exe
+        
+        See SYSTEM_REQUIREMENTS.md for detailed installation instructions.
+        "@ | Out-File -FilePath "release-windows\README.txt" -Encoding UTF8
+        Compress-Archive -Path "release-windows\*" -DestinationPath "adb-util-windows.zip"
     
     - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
@@ -128,111 +73,111 @@ jobs:
         name: adb-util-windows
         path: adb-util-windows.zip
 
-  build-linux:
-    runs-on: ubuntu-22.04
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-    
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          python3-dev \
-          python3-pip \
-          python3-venv \
-          build-essential \
-          qt6-base-dev \
-          qt6-tools-dev \
-          qt6-tools-dev-tools \
-          libgl1-mesa-dev \
-          libglib2.0-dev \
-          libfontconfig1-dev \
-          libdbus-1-dev \
-          libxkbcommon-dev \
-          libxkbcommon-x11-dev \
-          libxcb-xinerama0-dev \
-          libxcb-cursor0 \
-          android-tools-adb
-    
-    - name: Cache pip dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    
-    - name: Install Python dependencies
-      run: |
-        python3 -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
-    
-    - name: Build Linux executable
-      run: |
-        pyinstaller \
-          --onefile \
-          --name adb-util \
-          --paths src \
-          --add-data "src:src" \
-          --hidden-import PyQt6 \
-          --hidden-import PyQt6.QtCore \
-          --hidden-import PyQt6.QtGui \
-          --hidden-import PyQt6.QtWidgets \
-          --hidden-import qasync \
-          --hidden-import aiofiles \
-          --hidden-import psutil \
-          --hidden-import watchdog \
-          --collect-all PyQt6 \
-          --exclude-module matplotlib \
-          --exclude-module numpy \
-          --exclude-module pandas \
-          --exclude-module PIL \
-          --exclude-module tkinter \
-          main.py
-    
-    - name: Make executable and create checksum
-      run: |
-        chmod +x dist/adb-util
-        sha256sum dist/adb-util > dist/adb-util.sha256
-    
-    - name: Create Linux archive
-      run: |
-        mkdir release-linux
-        cp dist/adb-util release-linux/
-        cp dist/adb-util.sha256 release-linux/
-        cp README.md release-linux/
-        cp LICENSE release-linux/
-        cp SYSTEM_REQUIREMENTS.md release-linux/
-        echo "ADB-UTIL for Linux (Ubuntu 22.04+)" > release-linux/README.txt
-        echo "" >> release-linux/README.txt
-        echo "IMPORTANT: This application requires Android Debug Bridge (ADB) tools" >> release-linux/README.txt
-        echo "to be installed separately on your system." >> release-linux/README.txt
-        echo "" >> release-linux/README.txt
-        echo "1. Install ADB tools:" >> release-linux/README.txt
-        echo "   sudo apt-get install android-tools-adb" >> release-linux/README.txt
-        echo "2. Install Qt6 runtime (if not already installed):" >> release-linux/README.txt
-        echo "   sudo apt-get install qt6-base-dev" >> release-linux/README.txt
-        echo "3. Run ./adb-util" >> release-linux/README.txt
-        echo "" >> release-linux/README.txt
-        echo "See SYSTEM_REQUIREMENTS.md for detailed installation instructions." >> release-linux/README.txt
-        tar -czf adb-util-linux.tar.gz -C release-linux .
-    
-    - name: Upload Linux artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: adb-util-linux
-        path: adb-util-linux.tar.gz
+  # build-linux:
+  #   runs-on: ubuntu-22.04
+  #   
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+  #   
+  #   - name: Setup Python
+  #     uses: actions/setup-python@v5
+  #     with:
+  #       python-version: '3.11'
+  #   
+  #   - name: Install system dependencies
+  #     run: |
+  #       sudo apt-get update
+  #       sudo apt-get install -y \
+  #         python3-dev \
+  #         python3-pip \
+  #         python3-venv \
+  #         build-essential \
+  #         qt6-base-dev \
+  #         qt6-tools-dev \
+  #         qt6-tools-dev-tools \
+  #         libgl1-mesa-dev \
+  #         libglib2.0-dev \
+  #         libfontconfig1-dev \
+  #         libdbus-1-dev \
+  #         libxkbcommon-dev \
+  #         libxkbcommon-x11-dev \
+  #         libxcb-xinerama0-dev \
+  #         libxcb-cursor0 \
+  #         android-tools-adb
+  #   
+  #   - name: Cache pip dependencies
+  #     uses: actions/cache@v4
+  #     with:
+  #       path: ~/.cache/pip
+  #       key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+  #       restore-keys: |
+  #         ${{ runner.os }}-pip-
+  #   
+  #   - name: Install Python dependencies
+  #     run: |
+  #       python3 -m pip install --upgrade pip
+  #       pip install -r requirements.txt
+  #       pip install pyinstaller
+  #   
+  #   - name: Build Linux executable
+  #     run: |
+  #       pyinstaller \
+  #         --onefile \
+  #         --name adb-util \
+  #         --paths src \
+  #         --add-data "src:src" \
+  #         --hidden-import PyQt6 \
+  #         --hidden-import PyQt6.QtCore \
+  #         --hidden-import PyQt6.QtGui \
+  #         --hidden-import PyQt6.QtWidgets \
+  #         --hidden-import qasync \
+  #         --hidden-import aiofiles \
+  #         --hidden-import psutil \
+  #         --hidden-import watchdog \
+  #         --collect-all PyQt6 \
+  #         --exclude-module matplotlib \
+  #         --exclude-module numpy \
+  #         --exclude-module pandas \
+  #         --exclude-module PIL \
+  #         --exclude-module tkinter \
+  #         main.py
+  #   
+  #   - name: Make executable and create checksum
+  #     run: |
+  #       chmod +x dist/adb-util
+  #       sha256sum dist/adb-util > dist/adb-util.sha256
+  #   
+  #   - name: Create Linux archive
+  #     run: |
+  #       mkdir release-linux
+  #       cp dist/adb-util release-linux/
+  #       cp dist/adb-util.sha256 release-linux/
+  #       cp README.md release-linux/
+  #       cp LICENSE release-linux/
+  #       cp SYSTEM_REQUIREMENTS.md release-linux/
+  #       echo "ADB-UTIL for Linux (Ubuntu 22.04+)" > release-linux/README.txt
+  #       echo "" >> release-linux/README.txt
+  #       echo "IMPORTANT: This application requires Android Debug Bridge (ADB) tools" >> release-linux/README.txt
+  #       echo "to be installed separately on your system." >> release-linux/README.txt
+  #       echo "" >> release-linux/README.txt
+  #       echo "1. Install ADB tools:" >> release-linux/README.txt
+  #       echo "   sudo apt-get install android-tools-adb" >> release-linux/README.txt
+  #       echo "2. Install Qt6 runtime (if not already installed):" >> release-linux/README.txt
+  #       echo "   sudo apt-get install qt6-base-dev" >> release-linux/README.txt
+  #       echo "3. Run ./adb-util" >> release-linux/README.txt
+  #       echo "" >> release-linux/README.txt
+  #       echo "See SYSTEM_REQUIREMENTS.md for detailed installation instructions." >> release-linux/README.txt
+  #       tar -czf adb-util-linux.tar.gz -C release-linux .
+  #   
+  #   - name: Upload Linux artifacts
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: adb-util-linux
+  #       path: adb-util-linux.tar.gz
 
   create-release:
-    needs: [build-windows, build-linux]
+    needs: [build-windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     
@@ -242,17 +187,16 @@ jobs:
       with:
         name: adb-util-windows
     
-    - name: Download Linux artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: adb-util-linux
+    # - name: Download Linux artifacts
+    #   uses: actions/download-artifact@v4
+    #   with:
+    #     name: adb-util-linux
     
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           adb-util-windows.zip
-          adb-util-linux.tar.gz
         draft: false
         prerelease: false
         generate_release_notes: true
@@ -264,7 +208,6 @@ jobs:
           
           ### Downloads
           - **Windows**: Download `adb-util-windows.zip`
-          - **Linux (Ubuntu 22.04+)**: Download `adb-util-linux.tar.gz`
           
           ### Quick Installation
           
@@ -273,16 +216,15 @@ jobs:
           2. **Add ADB to PATH**: Add the extracted folder to your system PATH
           3. **Run ADB-UTIL**: Extract `adb-util-windows.zip` and run `adb-util.exe`
           
-          #### Linux
-          1. **Install dependencies**: `sudo apt-get install android-tools-adb qt6-base-dev`
-          2. **Run ADB-UTIL**: Extract `adb-util-linux.tar.gz` and run `./adb-util`
-          
           ### Verification
           Test ADB installation with: `adb version`
           
           ### Security
-          SHA256 checksums are included in each archive for verification.
+          SHA256 checksums are included in the archive for verification.
           
           ### Documentation
           See `SYSTEM_REQUIREMENTS.md` in the archive for detailed installation instructions.
+          
+          ### Note
+          Linux builds are temporarily disabled. Windows version is available.
         token: ${{ secrets.GITHUB_TOKEN }}
