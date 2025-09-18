@@ -1,0 +1,427 @@
+name: ADB-UTIL CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  POETRY_VERSION: '1.7.1'
+
+jobs:
+  # ============================================================================
+  # Code Quality and Linting
+  # ============================================================================
+  quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Format check with Black
+      run: |
+        python -m black --check --diff src/ tests/ main.py
+        
+    - name: Lint with Flake8
+      run: |
+        python -m flake8 src/ tests/ main.py --count --select=E9,F63,F7,F82 --show-source --statistics
+        python -m flake8 src/ tests/ main.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        
+    - name: Type check with MyPy
+      run: |
+        python -m mypy src/ --ignore-missing-imports
+        
+    - name: Security check with Bandit
+      run: |
+        pip install bandit[toml]
+        bandit -r src/ -f json -o bandit-report.json
+        
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-report
+        path: bandit-report.json
+
+  # ============================================================================
+  # Unit Tests - Multi-Platform
+  # ============================================================================
+  test:
+    name: Unit Tests
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        exclude:
+          # Reduce matrix size by excluding some combinations
+          - os: macos-latest
+            python-version: '3.9'
+          - os: macos-latest  
+            python-version: '3.10'
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/pip
+          ~/.cache/pypoetry
+        key: ${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-py${{ matrix.python-version }}-
+          ${{ runner.os }}-
+          
+    - name: Install system dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run unit tests with coverage
+      env:
+        QT_QPA_PLATFORM: offscreen
+        DISPLAY: ':99.0'
+      run: |
+        # Start virtual display on Linux
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          xvfb-run -a python -m pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=html --junitxml=junit.xml
+        else
+          python -m pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=html --junitxml=junit.xml
+        fi
+      shell: bash
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: |
+          junit.xml
+          htmlcov/
+          .coverage
+          
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: matrix.python-version == '3.11' && matrix.os == 'ubuntu-latest'
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  # ============================================================================
+  # Integration Tests
+  # ============================================================================
+  integration:
+    name: Integration Tests
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y android-tools-adb xvfb
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-integration-${{ hashFiles('**/requirements.txt') }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Start ADB server
+      run: |
+        adb start-server
+        adb devices
+        
+    - name: Run integration tests
+      env:
+        QT_QPA_PLATFORM: offscreen
+        DISPLAY: ':99.0'
+      run: |
+        xvfb-run -a python -m pytest tests/ -v -m integration --tb=short --junitxml=integration-junit.xml
+        
+    - name: Upload integration test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: integration-test-results
+        path: integration-junit.xml
+
+  # ============================================================================
+  # Performance Tests
+  # ============================================================================
+  performance:
+    name: Performance Tests
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-benchmark
+        
+    - name: Run performance tests
+      run: |
+        python -m pytest tests/ -v -m "slow or performance" --benchmark-json=benchmark.json
+        
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: benchmark.json
+
+  # ============================================================================
+  # Build and Package
+  # ============================================================================
+  build:
+    name: Build Application
+    needs: [quality, test]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Build executable (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        python -m PyInstaller --onefile --windowed --name adb-util-win --icon=assets/icon.ico main.py
+        
+    - name: Build executable (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        python -m PyInstaller --onefile --windowed --name adb-util-linux main.py
+        
+    - name: Build executable (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        python -m PyInstaller --onefile --windowed --name adb-util-macos main.py
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: executable-${{ matrix.os }}
+        path: dist/
+
+  # ============================================================================
+  # Security Scanning
+  # ============================================================================
+  security:
+    name: Security Scanning
+    needs: quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+        
+    - name: Safety check for Python dependencies
+      run: |
+        pip install safety
+        safety check --json --output safety-report.json || true
+        
+    - name: Upload safety report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: safety-report
+        path: safety-report.json
+
+  # ============================================================================
+  # Documentation Generation
+  # ============================================================================
+  docs:
+    name: Generate Documentation
+    needs: quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install sphinx sphinx-rtd-theme
+        
+    - name: Generate API documentation
+      run: |
+        sphinx-apidoc -o docs/api src/
+        sphinx-build -b html docs/ docs/_build/html
+        
+    - name: Upload documentation
+      uses: actions/upload-artifact@v3
+      with:
+        name: documentation
+        path: docs/_build/html/
+
+  # ============================================================================
+  # Release Creation
+  # ============================================================================
+  release:
+    name: Create Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [test, integration, build, security]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: ADB-UTIL ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        body: |
+          ## Changes in this Release
+          - See commit history for detailed changes
+          
+          ## Downloads
+          - Windows: `adb-util-win.exe`
+          - Linux: `adb-util-linux`  
+          - macOS: `adb-util-macos`
+          
+          ## Installation
+          1. Download the appropriate executable for your platform
+          2. Make it executable (Linux/macOS): `chmod +x adb-util-*`
+          3. Run the application: `./adb-util-*`
+          
+    - name: Upload Release Assets
+      run: |
+        for artifact in executable-*; do
+          if [ -d "$artifact" ]; then
+            for file in "$artifact"/*; do
+              echo "Uploading $file"
+              # Upload logic would go here
+            done
+          fi
+        done
+
+  # ============================================================================
+  # Notification and Cleanup
+  # ============================================================================
+  notify:
+    name: Notify Results
+    if: always()
+    needs: [quality, test, integration, build, security, docs]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Notification on Success
+      if: needs.test.result == 'success' && needs.integration.result == 'success'
+      run: |
+        echo "✅ All tests passed! Build is ready for deployment."
+        
+    - name: Notification on Failure
+      if: needs.test.result == 'failure' || needs.integration.result == 'failure'
+      run: |
+        echo "❌ Tests failed! Check the logs for details."
+        exit 1
