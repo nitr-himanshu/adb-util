@@ -64,6 +64,42 @@ A comprehensive Python-based desktop application for Android Debug Bridge (ADB) 
 
 ### Quick Setup
 
+#### Option 1: Automated Setup (Recommended)
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/nitr-himanshu/adb-util.git
+   cd adb-util
+   ```
+
+2. **Run the automated setup script**
+
+   ```bash
+   python scripts/dev/setup_dev.py
+   ```
+
+   This will automatically:
+   - Create a `.venv` virtual environment
+   - Install all dependencies
+   - Set up development tools
+   - Install pre-commit hooks (optional)
+
+3. **Activate the virtual environment and run**
+
+   ```bash
+   # Windows
+   .venv\Scripts\activate
+   
+   # macOS/Linux
+   source .venv/bin/activate
+   
+   # Run the application
+   adb-util
+   ```
+
+#### Option 2: Manual Setup
+
 1. **Clone the repository**
 
    ```bash
@@ -74,16 +110,16 @@ A comprehensive Python-based desktop application for Android Debug Bridge (ADB) 
 2. **Create and activate virtual environment**
 
    ```bash
-   python -m venv venv
+   python -m venv .venv
    
    # Windows
-   venv\Scripts\activate
+   .venv\Scripts\activate
    
    # macOS/Linux
-   source venv/bin/activate
+   source .venv/bin/activate
    ```
 
-3. **Install the package in development mode** (Recommended)
+3. **Install the package in development mode**
 
    ```bash
    # Modern installation using pyproject.toml
@@ -143,8 +179,8 @@ sudo apt install android-tools-adb
    ```bash
    git clone https://github.com/nitr-himanshu/adb-util.git
    cd adb-util
-   python -m venv venv
-   venv\Scripts\activate  # Windows
+   python -m venv .venv
+   .venv\Scripts\activate  # Windows
    pip install -e .  # Install in development mode
    ```
 
@@ -353,7 +389,7 @@ adb-util/
 │   ├── base.txt              # Core production dependencies
 │   ├── dev.txt               # Development dependencies
 │   └── prod.txt              # Production-specific overrides
-├── venv/                     # Virtual environment
+├── .venv/                    # Virtual environment
 ├── docs/                     # Documentation
 │   ├── app_requirement.md      # Feature requirements
 │   ├── development_plan.md     # Development roadmap
@@ -471,9 +507,9 @@ git clone https://github.com/nitr-himanshu/adb-util.git
 cd adb-util
 
 # Create virtual environment
-python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # macOS/Linux
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # macOS/Linux
 
 # Install in development mode (includes all dev dependencies)
 pip install -e .
@@ -507,6 +543,28 @@ pip install -r requirements/prod.txt
 ```bash
 pip install -r requirements/base.txt
 ```
+
+### Pre-commit Hooks
+
+The project includes pre-commit hooks for code quality. To set them up:
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install the hooks
+pre-commit install
+
+# Run hooks on all files (optional)
+pre-commit run --all-files
+```
+
+The hooks will automatically run on each commit and check:
+- Code formatting (Black)
+- Import sorting (isort)
+- Linting (flake8)
+- Type checking (mypy)
+- General file checks (trailing whitespace, YAML, JSON, etc.)
 
 ## Roadmap
 
