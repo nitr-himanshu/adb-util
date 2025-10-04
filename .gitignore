@@ -135,6 +135,14 @@ saved_commands.json
 *.log
 version_info.py
 
+# Build and distribution
+build/
+dist/
+*.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+
 # OS specific
 .DS_Store
 Thumbs.db
