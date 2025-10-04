@@ -20,9 +20,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor, QAction, QColor, QTextCharFormat
 
-from adb.command_runner import CommandRunner
-from utils.logger import get_logger
-from utils.constants import COMMAND_TIMEOUT
+from ..core.command_runner import CommandRunner
+from ..utils.logger import get_logger
+from ..utils.constants import COMMAND_TIMEOUT
 
 
 class CommandWorker(QThread):

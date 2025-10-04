@@ -18,8 +18,8 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer, QThread
-from adb.command_runner import ADBCommandRunner
-from utils.logger import get_logger
+from ..core.command_runner import ADBCommandRunner
+from ..utils.logger import get_logger
 
 
 class ScriptType(Enum):

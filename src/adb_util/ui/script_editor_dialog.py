@@ -23,9 +23,9 @@ from PyQt6.QtGui import (
     QTextDocument, QAction, QKeySequence, QTextCharFormat
 )
 
-from services.script_manager import Script, ScriptType
-from utils.logger import get_logger
-from utils.theme_manager import theme_manager
+from ..services.script_manager import Script, ScriptType
+from ..utils.logger import get_logger
+from ..utils.theme_manager import theme_manager
 
 
 class LineNumberArea(QWidget):

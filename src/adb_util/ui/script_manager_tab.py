@@ -23,11 +23,11 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QFont, QIcon, QAction, QPixmap
 
-from services.script_manager import (
+from ..services.script_manager import (
     get_script_manager, Script, ScriptType, ScriptExecution, ScriptStatus
 )
-from utils.logger import get_logger
-from utils.theme_manager import theme_manager
+from ..utils.logger import get_logger
+from ..utils.theme_manager import theme_manager
 
 
 class ScriptOutputDialog(QDialog):

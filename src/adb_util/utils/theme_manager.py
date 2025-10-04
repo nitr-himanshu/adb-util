@@ -28,6 +28,7 @@ class ThemeManager(QObject):
         """Get light theme stylesheet and properties."""
         return {
             "name": "Light",
+            "logo_path": "assets/logo_light.png",
             "stylesheet": """
                 QMainWindow {
                     background-color: #f0f0f0;
@@ -350,9 +351,10 @@ class ThemeManager(QObject):
         """Get dark theme stylesheet and properties."""
         return {
             "name": "Dark",
+            "logo_path": "assets/logo_dark.png",
             "stylesheet": """
                 QMainWindow {
-                    background-color: #2b2b2b;
+                    background-color: #000000;
                     color: #ffffff;
                 }
                 
@@ -392,7 +394,7 @@ class ThemeManager(QObject):
                 
                 QTabWidget::pane {
                     border: 1px solid #555555;
-                    background-color: #2b2b2b;
+                    background-color: #000000;
                 }
                 
                 QTabBar::tab {
@@ -405,7 +407,7 @@ class ThemeManager(QObject):
                 }
                 
                 QTabBar::tab:selected {
-                    background-color: #2b2b2b;
+                    background-color: #000000;
                     border-bottom: 2px solid #007acc;
                 }
                 
@@ -434,7 +436,7 @@ class ThemeManager(QObject):
                 }
                 
                 QListWidget {
-                    background-color: #2b2b2b;
+                    background-color: #000000;
                     color: #ffffff;
                     border: 1px solid #555555;
                     border-radius: 4px;
@@ -451,7 +453,7 @@ class ThemeManager(QObject):
                 }
                 
                 QTreeView {
-                    background-color: #2b2b2b;
+                    background-color: #000000;
                     color: #ffffff;
                     border: 1px solid #555555;
                     border-radius: 4px;
@@ -475,7 +477,7 @@ class ThemeManager(QObject):
                 }
                 
                 QTreeView::branch {
-                    background-color: #2b2b2b;
+                    background-color: #000000;
                 }
                 
                 QTreeView::branch:has-children:!has-siblings:closed,
@@ -503,7 +505,7 @@ class ThemeManager(QObject):
                 }
                 
                 QTextEdit {
-                    background-color: #1e1e1e;
+                    background-color: #000000;
                     color: #ffffff;
                     border: 1px solid #555555;
                     border-radius: 4px;
@@ -607,7 +609,7 @@ class ThemeManager(QObject):
                     subcontrol-origin: margin;
                     left: 8px;
                     padding: 0px 8px;
-                    background-color: #2b2b2b;
+                    background-color: #000000;
                 }
                 
                 QScrollBar:vertical {
@@ -745,8 +747,8 @@ class ThemeManager(QObject):
                 "success": "#28a745",
                 "warning": "#ffc107",
                 "danger": "#dc3545",
-                "background": "#2b2b2b",
-                "surface": "#363636",
+                "background": "#000000",
+                "surface": "#1a1a1a",
                 "text": "#ffffff"
             }
         }
@@ -771,6 +773,11 @@ class ThemeManager(QObject):
         """Get color palette for the specified theme."""
         theme_name = theme_name or self.current_theme
         return self.themes.get(theme_name, {}).get("colors", {})
+    
+    def get_logo_path(self, theme_name: str = None) -> str:
+        """Get logo path for the specified theme."""
+        theme_name = theme_name or self.current_theme
+        return self.themes.get(theme_name, {}).get("logo_path", "assets/logo_light.png")
     
     def _apply_theme(self):
         """Apply the current theme to the application."""

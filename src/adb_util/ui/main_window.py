@@ -11,14 +11,14 @@ from PyQt6.QtWidgets import (
     QMessageBox, QSplitter, QListWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QFont, QAction
+from PyQt6.QtGui import QFont, QAction, QPixmap, QIcon
 
-from adb.device_manager import DeviceManager
-from models.device import Device
-from utils.logger import get_logger
-from utils.constants import TAB_MODES
-from utils.device_utils import device_utils
-from utils.theme_manager import theme_manager
+from ..core.device.manager import DeviceManager
+from ..models.device import Device
+from ..utils.logger import get_logger
+from ..utils.constants import TAB_MODES
+from ..utils.device_utils import device_utils
+from ..utils.theme_manager import theme_manager
 
 
 class DeviceDiscoveryWorker(QThread):
@@ -62,6 +62,7 @@ class MainWindow(QMainWindow):
         self.status_label = None
         self.device_count_label = None
         self.adb_status_label = None
+        self.logo_label = None
         
         # Device management
         self.device_manager = DeviceManager()
@@ -87,6 +88,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("ADB-UTIL - Android Debug Bridge Utility")
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(800, 600)
+        
+        # Set window icon
+        self.set_window_icon()
         
         # Create central widget
         central_widget = QWidget()
@@ -281,6 +285,13 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Logo
+        self.logo_label = QLabel()
+        self.update_logo()
+        self.logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.logo_label.setMaximumHeight(120)
+        layout.addWidget(self.logo_label)
         
         # Welcome message
         welcome_label = QLabel("Welcome to ADB-UTIL")
@@ -602,6 +613,12 @@ class MainWindow(QMainWindow):
     def on_theme_changed(self, theme_name: str):
         """Handle theme change event."""
         try:
+            # Update logo based on theme
+            self.update_logo()
+            
+            # Update window icon based on theme
+            self.set_window_icon()
+            
             # Update theme toggle button
             if hasattr(self, 'theme_toggle_btn'):
                 theme_icon = "🌙" if theme_name == "dark" else "☀️"
@@ -635,3 +652,45 @@ class MainWindow(QMainWindow):
             
         except Exception as e:
             self.logger.error(f"Error handling theme change: {e}")
+    
+    def update_logo(self):
+        """Update the logo based on the current theme."""
+        try:
+            if self.logo_label is None:
+                return
+                
+            # Get the logo path for the current theme
+            logo_path = theme_manager.get_logo_path()
+            
+            # Load and scale the logo
+            pixmap = QPixmap(logo_path)
+            if not pixmap.isNull():
+                # Scale the logo to fit within the maximum height while maintaining aspect ratio
+                scaled_pixmap = pixmap.scaledToHeight(60, Qt.TransformationMode.SmoothTransformation)
+                self.logo_label.setPixmap(scaled_pixmap)
+                self.logger.debug(f"Logo updated to: {logo_path}")
+            else:
+                self.logger.warning(f"Failed to load logo: {logo_path}")
+                
+        except Exception as e:
+            self.logger.error(f"Error updating logo: {e}")
+    
+    def set_window_icon(self):
+        """Set the window icon based on the current theme."""
+        try:
+            # Get the logo path for the current theme
+            logo_path = theme_manager.get_logo_path()
+            
+            # Load and scale the icon for the title bar
+            pixmap = QPixmap(logo_path)
+            if not pixmap.isNull():
+                # Scale the icon to a smaller size suitable for title bar (32x32)
+                scaled_pixmap = pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                icon = QIcon(scaled_pixmap)
+                self.setWindowIcon(icon)
+                self.logger.debug(f"Window icon updated to: {logo_path}")
+            else:
+                self.logger.warning(f"Failed to load window icon: {logo_path}")
+                
+        except Exception as e:
+            self.logger.error(f"Error setting window icon: {e}")

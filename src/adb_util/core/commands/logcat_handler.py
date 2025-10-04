@@ -11,8 +11,8 @@ from typing import AsyncGenerator, Optional, Dict, List, Callable
 from datetime import datetime
 from dataclasses import dataclass
 
-from utils.logger import get_logger
-from utils.constants import ADB_LOGCAT_COMMAND, COMMAND_TIMEOUT, MAX_LOG_BUFFER_SIZE
+from ..utils.logger import get_logger
+from ..utils.constants import ADB_LOGCAT_COMMAND, COMMAND_TIMEOUT, MAX_LOG_BUFFER_SIZE
 
 
 @dataclass

@@ -9,9 +9,9 @@ import re
 from typing import List, Optional, Dict, Tuple
 from datetime import datetime
 
-from models.device import Device
-from utils.logger import get_logger
-from utils.constants import (
+from ..models.device import Device
+from ..utils.logger import get_logger
+from ..utils.constants import (
     ADB_DEVICES_COMMAND, 
     CONNECTION_TCPIP, 
     CONNECTION_USB,

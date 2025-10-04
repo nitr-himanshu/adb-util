@@ -19,9 +19,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread
 from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QPalette
 
-from adb.logcat_handler import LogcatHandler, LogEntry
-from utils.logger import get_logger
-from utils.constants import LOG_LEVELS, LOGCAT_FORMATS, LOGCAT_BUFFERS, MAX_LOG_BUFFER_SIZE
+from ..core.logcat_handler import LogcatHandler, LogEntry
+from ..utils.logger import get_logger
+from ..utils.constants import LOG_LEVELS, LOGCAT_FORMATS, LOGCAT_BUFFERS, MAX_LOG_BUFFER_SIZE
 
 
 class LogcatWorker(QThread):

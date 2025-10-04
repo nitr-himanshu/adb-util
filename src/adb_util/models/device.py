@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-from utils.constants import (
+from ..utils.constants import (
     DEVICE_STATE_DEVICE,
     DEVICE_STATE_UNKNOWN,
     CONNECTION_USB

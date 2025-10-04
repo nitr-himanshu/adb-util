@@ -13,11 +13,11 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 
-from utils.logger import (
+from ..utils.logger import (
     get_logger, enable_file_logging, disable_file_logging,
     get_log_info, set_console_level, set_file_level
 )
-from utils.constants import DEFAULT_LOG_DIR
+from ..utils.constants import DEFAULT_LOG_DIR
 import logging
 from pathlib import Path
 

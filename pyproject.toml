@@ -64,7 +64,7 @@ prod = [
 ]
 
 [project.scripts]
-adb-util = "main:main"
+adb-util = "adb_util.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/nitr-himanshu/adb-util"
@@ -73,8 +73,8 @@ Issues = "https://github.com/nitr-himanshu/adb-util/issues"
 Documentation = "https://github.com/nitr-himanshu/adb-util#readme"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
+include = ["adb_util*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.txt", "*.md", "*.json", "*.yml", "*.yaml"]
