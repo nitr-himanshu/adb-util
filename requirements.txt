@@ -1,36 +1,16 @@
 # ADB-UTIL Requirements
-# Python dependencies for the ADB-UTIL application
+# 
+# This file is kept for backward compatibility.
+# For new installations, use the requirements in the requirements/ directory:
+#
+# Development setup:
+#   pip install -r requirements/dev.txt
+#
+# Production setup:
+#   pip install -r requirements/prod.txt
+#
+# Or use the modern installation method:
+#   pip install -e .
 
-# GUI Framework
-PyQt6>=6.5.0
-# Alternative: PySide6>=6.5.0
-
-# Async Qt integration
-qasync>=0.24.0
-
-# Note: ADB integration is done via system 'adb' binary (subprocess calls)
-# No Python ADB library is required - install Android Platform Tools separately
-
-# Async File Operations
-aiofiles>=23.0.0
-
-# System Monitoring
-psutil>=5.9.0
-
-# File System Monitoring
-watchdog>=3.0.0
-
-# Development and Quality Tools
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-pytest-qt>=4.2.0
-pytest-cov>=4.1.0
-pytest-mock>=3.11.0
-pytest-xdist>=3.3.0
-coverage>=7.3.0
-black>=23.0.0
-flake8>=6.0.0
-mypy>=1.5.0
-
-# Optional: JSON formatting
-jsonschema>=4.19.0
+# Default to development requirements for backward compatibility
+-r requirements/dev.txt

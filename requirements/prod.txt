@@ -1,0 +1,14 @@
+# ADB-UTIL Production Requirements
+# Production-specific dependency overrides
+
+# Include base requirements
+-r base.txt
+
+# Production-specific optimizations or alternatives can be added here
+# For example, if you want to use PySide6 instead of PyQt6 in production:
+# PySide6>=6.5.0
+# -PyQt6
+
+# Or if you want to pin specific versions for production stability:
+# PyQt6==6.5.0
+# qasync==0.24.0

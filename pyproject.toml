@@ -1,0 +1,189 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adb-util"
+version = "0.1.0"
+description = "A comprehensive Python-based desktop application for Android Debug Bridge (ADB) operations with a modern GUI interface"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Himanshu Keshri", email = "thehimanshukeshri@gmail.com"}
+]
+maintainers = [
+    {name = "Himanshu Keshri", email = "thehimanshukeshri@gmail.com"}
+]
+keywords = ["adb", "android", "debug", "bridge", "gui", "pyqt6", "desktop"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+    "Topic :: Desktop Environment :: Window Managers",
+    "Topic :: Multimedia :: Graphics :: Capture :: Screen Capture",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "PyQt6>=6.5.0",
+    "qasync>=0.24.0",
+    "aiofiles>=23.0.0",
+    "psutil>=5.9.0",
+    "watchdog>=3.0.0",
+    "jsonschema>=4.19.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-qt>=4.2.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "pytest-xdist>=3.3.0",
+    "coverage>=7.3.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+]
+prod = [
+    "PyQt6>=6.5.0",
+    "qasync>=0.24.0",
+    "aiofiles>=23.0.0",
+    "psutil>=5.9.0",
+    "watchdog>=3.0.0",
+    "jsonschema>=4.19.0",
+]
+
+[project.scripts]
+adb-util = "main:main"
+
+[project.urls]
+Homepage = "https://github.com/nitr-himanshu/adb-util"
+Repository = "https://github.com/nitr-himanshu/adb-util.git"
+Issues = "https://github.com/nitr-himanshu/adb-util/issues"
+Documentation = "https://github.com/nitr-himanshu/adb-util#readme"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.txt", "*.md", "*.json", "*.yml", "*.yaml"]
+
+# Black configuration
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "PyQt6.*",
+    "qasync.*",
+    "aiofiles.*",
+    "psutil.*",
+    "watchdog.*",
+    "jsonschema.*",
+]
+ignore_missing_imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "gui: marks tests as GUI tests requiring display",
+]
+asyncio_mode = "auto"
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/build/*",
+    "*/dist/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+# Flake8 configuration
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503", "E501"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "venv",
+    ".venv",
+    "*.egg-info",
+]
+per-file-ignores = [
+    "__init__.py:F401",
+    "tests/*:S101",
+]

@@ -74,24 +74,32 @@ A comprehensive Python-based desktop application for Android Debug Bridge (ADB) 
 2. **Create and activate virtual environment**
 
    ```bash
-   python -m venv adb-util-env
+   python -m venv venv
    
    # Windows
-   adb-util-env\Scripts\activate
+   venv\Scripts\activate
    
    # macOS/Linux
-   source adb-util-env/bin/activate
+   source venv/bin/activate
    ```
 
-3. **Install dependencies**
+3. **Install the package in development mode** (Recommended)
 
    ```bash
-   pip install -r requirements.txt
+   # Modern installation using pyproject.toml
+   pip install -e .
+   
+   # Or install development dependencies directly
+   pip install -r requirements/dev.txt
    ```
 
 4. **Run the application**
 
    ```bash
+   # Using the installed script
+   adb-util
+   
+   # Or run directly
    python main.py
    ```
 
@@ -135,15 +143,17 @@ sudo apt install android-tools-adb
    ```bash
    git clone https://github.com/nitr-himanshu/adb-util.git
    cd adb-util
-   python -m venv adb-util-env
-   adb-util-env\Scripts\activate  # Windows
-   pip install -r requirements.txt
+   python -m venv venv
+   venv\Scripts\activate  # Windows
+   pip install -e .  # Install in development mode
    ```
 
 2. **Launch Application**
 
    ```bash
-   python main.py
+   adb-util  # Using installed script
+   # or
+   python main.py  # Direct execution
    ```
 
 3. **Current Working Features**
@@ -336,9 +346,15 @@ Captured logs can be exported in various formats:
 ```text
 adb-util/
 ├── main.py                     # Application entry point
-├── requirements.txt            # Python dependencies
-├── adb-util-env/              # Virtual environment
-├── docs/                       # Documentation
+├── pyproject.toml             # Modern Python packaging configuration
+├── setup.py                   # Backward compatibility setup script
+├── requirements.txt           # Backward compatibility requirements
+├── requirements/              # Split requirements files
+│   ├── base.txt              # Core production dependencies
+│   ├── dev.txt               # Development dependencies
+│   └── prod.txt              # Production-specific overrides
+├── venv/                     # Virtual environment
+├── docs/                     # Documentation
 │   ├── app_requirement.md      # Feature requirements
 │   ├── development_plan.md     # Development roadmap
 │   ├── device_discovery_implementation.md  # Device discovery docs
@@ -455,24 +471,41 @@ git clone https://github.com/nitr-himanshu/adb-util.git
 cd adb-util
 
 # Create virtual environment
-python -m venv adb-util-env
-adb-util-env\Scripts\activate  # Windows
-# source adb-util-env/bin/activate  # macOS/Linux
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # macOS/Linux
 
-# Install dependencies
-pip install -r requirements.txt
+# Install in development mode (includes all dev dependencies)
+pip install -e .
 
 # Run tests
-python -m pytest tests/ -v
+pytest tests/ -v
 
 # Format code
-python -m black src/ tests/ main.py
+black src/ tests/ main.py
 
 # Lint code
-python -m flake8 src/ tests/ main.py
+flake8 src/ tests/ main.py
 
 # Type check
-python -m mypy src/
+mypy src/
+```
+
+### Alternative Installation Methods
+
+**Development dependencies only:**
+```bash
+pip install -r requirements/dev.txt
+```
+
+**Production dependencies only:**
+```bash
+pip install -r requirements/prod.txt
+```
+
+**Base dependencies only:**
+```bash
+pip install -r requirements/base.txt
 ```
 
 ## Roadmap
